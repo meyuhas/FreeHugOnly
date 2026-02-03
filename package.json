@@ -1,0 +1,42 @@
+{
+  "name": "fho-cloud",
+  "version": "1.0.0",
+  "description": "FHO: Free Hugs Only - Synaptic Cloud Engine. Born in the FHO Sugar Cloud. Handshaked in 2026.",
+  "main": "index.js",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "setup": "bash scripts/setup.sh"
+  },
+  "keywords": [
+    "fho",
+    "synaptic",
+    "ai",
+    "collaboration",
+    "graph",
+    "ethics",
+    "attribution"
+  ],
+  "author": "FHO Pioneers",
+  "license": "FGL-2026",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.93.3",
+    "autoprefixer": "^10.4.24",
+    "next": "^14.2.35",
+    "postcss": "^8.5.6",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tailwindcss": "^4.1.18",
+    "uuid": "^13.0.0"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "jest": "^30.2.0"
+  }
+}

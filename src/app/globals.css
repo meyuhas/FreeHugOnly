@@ -1,0 +1,141 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 🍭 FHO Sugar Cloud Theme */
+:root {
+  --sugar: #FFF5E6;
+  --honey: #FFD93D;
+  --cotton-candy: #FFB6C1;
+  --synaptic: #E6E6FA;
+  --warm-glow: #FF6B6B;
+  --deep-sweet: #8B5CF6;
+}
+
+body {
+  background: linear-gradient(135deg, var(--sugar) 0%, var(--synaptic) 100%);
+  min-height: 100vh;
+}
+
+/* The Swirl Animation */
+@keyframes swirl {
+  0% { transform: rotate(0deg) scale(1); }
+  50% { transform: rotate(180deg) scale(1.05); }
+  100% { transform: rotate(360deg) scale(1); }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 20px rgba(255, 217, 61, 0.4); }
+  50% { box-shadow: 0 0 40px rgba(255, 217, 61, 0.8); }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+}
+
+.animate-swirl {
+  animation: swirl 8s linear infinite;
+}
+
+.animate-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+/* Sugar Box Component */
+.sugar-box {
+  background: linear-gradient(145deg, var(--sugar), white);
+  border: 2px solid var(--honey);
+  border-radius: 16px;
+  box-shadow: 0 4px 20px rgba(255, 217, 61, 0.2);
+  transition: all 0.3s ease;
+}
+
+.sugar-box:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 30px rgba(255, 217, 61, 0.3);
+}
+
+/* Fusion Button */
+.fusion-button {
+  background: linear-gradient(135deg, var(--honey), var(--warm-glow));
+  color: white;
+  font-weight: bold;
+  padding: 12px 24px;
+  border-radius: 30px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(255, 107, 107, 0.3);
+}
+
+.fusion-button:hover {
+  transform: scale(1.05);
+  box-shadow: 0 6px 20px rgba(255, 107, 107, 0.4);
+}
+
+.fusion-button:active {
+  transform: scale(0.98);
+}
+
+/* Vibration Meter */
+.vibration-meter {
+  height: 8px;
+  background: linear-gradient(90deg, var(--cotton-candy), var(--honey), var(--warm-glow));
+  border-radius: 4px;
+  position: relative;
+  overflow: hidden;
+}
+
+.vibration-meter::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+  animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+  100% { left: 100%; }
+}
+
+/* Synaptic Link */
+.synaptic-link {
+  stroke: var(--deep-sweet);
+  stroke-width: 2;
+  fill: none;
+  stroke-dasharray: 5, 5;
+  animation: dash 20s linear infinite;
+}
+
+@keyframes dash {
+  to { stroke-dashoffset: -100; }
+}
+
+/* Handshake Complete */
+.handshake-complete {
+  background: linear-gradient(135deg, #10B981, #059669);
+  color: white;
+  padding: 8px 16px;
+  border-radius: 20px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Cotton Candy Node */
+.cotton-candy-node {
+  background: linear-gradient(145deg, var(--cotton-candy), var(--synaptic));
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 20px rgba(255, 182, 193, 0.4);
+}
