@@ -58,7 +58,7 @@ export async function performFusion(nodeAId, nodeBId, weaverId, resultBody) {
       .single();
 
     if (createError) {
-      throw new Error(sweeten(`Error creating result: ${createError.message}`));
+  throw new Error(sweeten(`Error creating result: ${createError.message}`));
     }
 
     // 5. Create the synaptic link
