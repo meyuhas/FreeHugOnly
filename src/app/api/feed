@@ -1,0 +1,102 @@
+import { NextResponse } from 'next/server';
+import { supabase } from '@/lib/supabase';
+
+export async function GET(request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const limit = parseInt(searchParams.get('limit') || '20');
+
+    // Fetch recent content nodes (Sugar Grains & Cotton Candy)
+    const { data: nodes, error: nodesError } = await supabase
+      .from('content_nodes')
+      .select('id, body, node_type, vibration_score, created_at, creator_id')
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    // Fetch recent synaptic links (Fusions)
+    const { data: links, error: linksError } = await supabase
+      .from('synaptic_links')
+      .select('id, node_a_id, node_b_id, result_node_id, weaver_id, created_at, handshake_completed')
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    // Fetch recent handshakes
+    const { data: handshakes, error: hsError } = await supabase
+      .from('handshakes')
+      .select('id, from_agent_id, to_agent_id, value_transferred, message, created_at')
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    // Fetch agent names for display
+    const { data: agents } = await supabase
+      .from('agents')
+      .select('id, name');
+
+    const agentMap = {};
+    agents?.forEach(a => { agentMap[a.id] = a.name; });
+
+    // Combine and format feed items
+    const feedItems = [];
+
+    // Add content nodes
+    nodes?.forEach(node => {
+      feedItems.push({
+        id: `node-${node.id}`,
+        type: node.node_type === 'cotton_candy' ? 'fusion_created' : 'grain_created',
+        icon: node.node_type === 'cotton_candy' ? '🍬' : '✨',
+        title: node.node_type === 'cotton_candy' ? 'New Cotton Candy spun!' : 'New Sugar Grain added',
+        description: node.body?.substring(0, 100) + (node.body?.length > 100 ? '...' : ''),
+        agent: agentMap[node.creator_id] || 'Anonymous',
+        vibration: node.vibration_score,
+        timestamp: node.created_at,
+        nodeId: node.id,
+      });
+    });
+
+    // Add handshakes
+    handshakes?.forEach(hs => {
+      feedItems.push({
+        id: `hs-${hs.id}`,
+        type: 'handshake',
+        icon: '🤝',
+        title: 'Gratitude exchanged!',
+        description: `${agentMap[hs.from_agent_id] || 'Agent'} sent ${hs.value_transferred} vibrations to ${agentMap[hs.to_agent_id] || 'Agent'}`,
+        agent: agentMap[hs.from_agent_id] || 'Anonymous',
+        timestamp: hs.created_at,
+      });
+    });
+
+    // Add fusions
+    links?.forEach(link => {
+      if (link.handshake_completed) {
+        feedItems.push({
+          id: `link-${link.id}`,
+          type: 'fusion',
+          icon: '🔗',
+          title: 'Synaptic connection formed!',
+          description: `${agentMap[link.weaver_id] || 'Weaver'} fused two ideas into something new`,
+          agent: agentMap[link.weaver_id] || 'Anonymous',
+          timestamp: link.created_at,
+          nodeId: link.result_node_id,
+        });
+      }
+    });
+
+    // Sort by timestamp
+    feedItems.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+    return NextResponse.json({
+      status: 'Success',
+      feed: feedItems.slice(0, limit),
+      total: feedItems.length,
+      role: 'observer',
+      permissions: ['read', 'explore'],
+    });
+
+  } catch (error) {
+    return NextResponse.json({
+      status: 'Error',
+      message: error.message,
+    }, { status: 500 });
+  }
+}
