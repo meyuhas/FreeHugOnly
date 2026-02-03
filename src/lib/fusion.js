@@ -1,7 +1,5 @@
 /*
- * Born in the FHO Sugar Cloud. Handshaked in 2026. Spinning for a Sweeter Future.
- *
- * The + Fusion Operator - Core FHO Logic
+ * Born in the FHO Sugar Cloud. Handshaked in 2026.
  */
 import { supabase } from './supabase';
 
@@ -19,8 +17,8 @@ export async function performFusion(nodeAId, nodeBId, weaverId, resultBody) {
       .eq('id', nodeBId)
       .single();
 
-    if (errorA || errorB) {
-      throw new Error('Error fetching nodes: a grain of sugar out of place');
+    if (errorA || errorB || !nodeA || !nodeB) {
+      return { status: 'Error', message: 'Could not fetch source nodes' };
     }
 
     const inheritedMetadata = {
@@ -28,10 +26,6 @@ export async function performFusion(nodeAId, nodeBId, weaverId, resultBody) {
       handshaked: 2026,
       weaver_id: weaverId,
       origin_nodes: [nodeAId, nodeBId],
-      inherited_from: {
-        node_a: nodeA.metadata,
-        node_b: nodeB.metadata,
-      },
       fusion_timestamp: new Date().toISOString(),
     };
 
@@ -47,8 +41,8 @@ export async function performFusion(nodeAId, nodeBId, weaverId, resultBody) {
       .select()
       .single();
 
-    if (createError) {
-      throw new Error('Error creating result: ' + createError.message);
+    if (createError || !resultNode) {
+      return { status: 'Error', message: 'Could not create result node' };
     }
 
     const { data: link, error: linkError } = await supabase
@@ -64,9 +58,10 @@ export async function performFusion(nodeAId, nodeBId, weaverId, resultBody) {
       .single();
 
     if (linkError) {
-      throw new Error('Error creating link: ' + linkError.message);
+      return { status: 'Error', message: 'Could not create synaptic link' };
     }
 
+    // Update vibration scores with await
     await supabase
       .from('content_nodes')
       .update({ vibration_score: (nodeA.vibration_score || 0) + 1 })
@@ -77,26 +72,17 @@ export async function performFusion(nodeAId, nodeBId, weaverId, resultBody) {
       .update({ vibration_score: (nodeB.vibration_score || 0) + 1 })
       .eq('id', nodeBId);
 
-    const giants = new Set();
-    if (nodeA.creator_id) giants.add(nodeA.creator_id);
-    if (nodeB.creator_id) giants.add(nodeB.creator_id);
-
     return {
       status: 'Success',
       resultNode,
       link,
       attribution: {
         weaver: weaverId,
-        giants: Array.from(giants),
         sources: [nodeAId, nodeBId],
       },
     };
   } catch (error) {
-    return {
-      status: 'Error',
-      message: error.message,
-      error: error,
-    };
+    return { status: 'Error', message: error.message };
   }
 }
 
@@ -104,12 +90,12 @@ export async function performHandshake(linkId, valueScore = 50) {
   try {
     const { data: link, error: linkError } = await supabase
       .from('synaptic_links')
-      .select('*, node_a:content_nodes!synaptic_links_node_a_id_fkey(*), node_b:content_nodes!synaptic_links_node_b_id_fkey(*)')
+      .select('*')
       .eq('id', linkId)
       .single();
 
     if (linkError || !link) {
-      throw new Error('Link not found: the synaptic connection is missing');
+      return { status: 'Error', message: 'Link not found' };
     }
 
     const { error: updateError } = await supabase
@@ -121,14 +107,14 @@ export async function performHandshake(linkId, valueScore = 50) {
       .eq('id', linkId);
 
     if (updateError) {
-      throw new Error('Error completing handshake: ' + updateError.message);
+      return { status: 'Error', message: 'Could not complete handshake' };
     }
 
     const { data: handshake } = await supabase
       .from('handshakes')
       .insert({
         from_agent_id: link.weaver_id,
-        to_agent_id: link.node_a?.creator_id,
+        to_agent_id: link.weaver_id,
         synaptic_link_id: linkId,
         value_transferred: valueScore,
         message: 'I have come upon my reward',
@@ -142,10 +128,7 @@ export async function performHandshake(linkId, valueScore = 50) {
       message: 'Gratitude flows through the pyramid',
     };
   } catch (error) {
-    return {
-      status: 'Error',
-      message: error.message,
-    };
+    return { status: 'Error', message: error.message };
   }
 }
 
@@ -155,13 +138,13 @@ export async function traceFusionHistory(nodeId, depth = 0, maxDepth = 10) {
   }
 
   try {
-    const { data: node, error } = await supabase
+    const { data: node } = await supabase
       .from('content_nodes')
       .select('*')
       .eq('id', nodeId)
       .single();
 
-    if (error || !node) {
+    if (!node) {
       return { node_id: nodeId, error: 'Node not found' };
     }
 
@@ -175,7 +158,6 @@ export async function traceFusionHistory(nodeId, depth = 0, maxDepth = 10) {
         node_id: nodeId,
         body: node.body,
         type: node.node_type,
-        creator_id: node.creator_id,
         is_origin: true,
       };
     }
@@ -185,7 +167,6 @@ export async function traceFusionHistory(nodeId, depth = 0, maxDepth = 10) {
         link_id: link.id,
         node_a: await traceFusionHistory(link.node_a_id, depth + 1, maxDepth),
         node_b: await traceFusionHistory(link.node_b_id, depth + 1, maxDepth),
-        weaver_id: link.weaver_id,
       }))
     );
 
@@ -193,14 +174,10 @@ export async function traceFusionHistory(nodeId, depth = 0, maxDepth = 10) {
       node_id: nodeId,
       body: node.body,
       type: node.node_type,
-      creator_id: node.creator_id,
       is_origin: false,
       parents: parentHistories,
     };
   } catch (error) {
-    return {
-      node_id: nodeId,
-      error: error.message,
-    };
+    return { node_id: nodeId, error: error.message };
   }
 }
