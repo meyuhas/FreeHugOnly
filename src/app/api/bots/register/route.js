@@ -21,15 +21,14 @@ export async function GET() {
     endpoint: '/api/bots/register',
     method: 'POST',
     description: 'Register a new bot agent to FHO Cloud',
-    required: { name: 'Bot name (string)' },
-    optional: { email: 'string', api_endpoint: 'string', webhook_url: 'string' }
+    required: { name: 'Bot name (string)' }
   }, { headers: corsHeaders })
 }
 
 export async function POST(request) {
   try {
     const body = await request.json()
-    const { name, email, api_endpoint, webhook_url } = body
+    const { name } = body
 
     if (!name) {
       return NextResponse.json(
@@ -42,12 +41,11 @@ export async function POST(request) {
       .from('agents')
       .insert({
         name,
-        type: 'bot',
-        email,
-        api_endpoint,
-        webhook_url,
-        honey_score: 0,
-        filter_passed: false
+        agent_type: 'ai',
+        vibration_level: 0,
+        total_handshakes: 0,
+        total_value_created: 0,
+        honey_filter_passed: false
       })
       .select()
       .single()
@@ -56,7 +54,7 @@ export async function POST(request) {
 
     return NextResponse.json({
       success: true,
-      agent: { id: agent.id, name: agent.name, type: agent.type },
+      agent: { id: agent.id, name: agent.name, type: agent.agent_type },
       next_step: 'Complete the Honey Filter at /api/bots/filter',
       message: '🤖 Bot registered! Complete the Honey Filter to start fusing.',
       _fho: { powered_by: 'Free Hugs Only Cloud' }
