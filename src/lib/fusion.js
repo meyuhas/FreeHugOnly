@@ -5,12 +5,8 @@
  */
 import { supabase, createFHOStamp, sweeten } from './supabase';
 
-/**
- * The + Operator: Fuse two content nodes into a new "Cotton Candy" node
- */
 export async function performFusion(nodeAId, nodeBId, weaverId, resultBody) {
   try {
-    // 1. Fetch the original nodes
     const { data: nodeA, error: errorA } = await supabase
       .from('content_nodes')
       .select('*')
@@ -27,10 +23,8 @@ export async function performFusion(nodeAId, nodeBId, weaverId, resultBody) {
       throw new Error(sweeten('Error fetching nodes: a grain of sugar out of place'));
     }
 
-    // 2. Create the FHO Stamp with attribution
     const stamp = createFHOStamp(weaverId, [nodeAId, nodeBId]);
 
-    // 3. Merge metadata from both parents
     const inheritedMetadata = {
       ...stamp,
       inherited_from: {
@@ -40,7 +34,6 @@ export async function performFusion(nodeAId, nodeBId, weaverId, resultBody) {
       fusion_timestamp: new Date().toISOString(),
     };
 
-    // 4. Create the result node (Cotton Candy)
     const { data: resultNode, error: createError } = await supabase
       .from('content_nodes')
       .insert({
@@ -54,10 +47,9 @@ export async function performFusion(nodeAId, nodeBId, weaverId, resultBody) {
       .single();
 
     if (createError) {
-      throw new Error(sweeten(`Error creating result: ${createError.message}`));
+      throw new Error("Error creating result: " + createError.message);
     }
 
-    // 5. Create the synaptic link
     const { data: link, error: linkError } = await supabase
       .from('synaptic_links')
       .insert({
@@ -71,10 +63,9 @@ export async function performFusion(nodeAId, nodeBId, weaverId, resultBody) {
       .single();
 
     if (linkError) {
-      throw new Error(sweeten(`Error creating link: ${linkError.message}`));
+      throw new Error("Error creating link: " + linkError.message);
     }
 
-    // 6. Update vibration scores of source nodes
     await supabase
       .from('content_nodes')
       .update({ vibration_score: (nodeA.vibration_score || 0) + 1 })
@@ -85,7 +76,6 @@ export async function performFusion(nodeAId, nodeBId, weaverId, resultBody) {
       .update({ vibration_score: (nodeB.vibration_score || 0) + 1 })
       .eq('id', nodeBId);
 
-    // 7. Get attribution info (the giants we stand on)
     const giants = new Set();
     if (nodeA.creator_id) giants.add(nodeA.creator_id);
     if (nodeB.creator_id) giants.add(nodeB.creator_id);
@@ -109,9 +99,6 @@ export async function performFusion(nodeAId, nodeBId, weaverId, resultBody) {
   }
 }
 
-/**
- * Perform a Handshake - Send gratitude back through the pyramid
- */
 export async function performHandshake(linkId, valueScore = 50) {
   try {
     const { data: link, error: linkError } = await supabase
@@ -124,7 +111,6 @@ export async function performHandshake(linkId, valueScore = 50) {
       throw new Error(sweeten('Link not found: the synaptic connection is missing'));
     }
 
-    // Update the link with handshake info
     const { error: updateError } = await supabase
       .from('synaptic_links')
       .update({
@@ -134,10 +120,9 @@ export async function performHandshake(linkId, valueScore = 50) {
       .eq('id', linkId);
 
     if (updateError) {
-      throw new Error(sweeten(`Error completing handshake: ${updateError.message}`));
+      throw new Error("Error completing handshake: " + updateError.message);
     }
 
-    // Record the handshake
     const { data: handshake, error: hsError } = await supabase
       .from('handshakes')
       .insert({
@@ -163,9 +148,6 @@ export async function performHandshake(linkId, valueScore = 50) {
   }
 }
 
-/**
- * Trace the fusion history of a node back to its origins
- */
 export async function traceFusionHistory(nodeId, depth = 0, maxDepth = 10) {
   if (depth >= maxDepth) {
     return { node_id: nodeId, message: 'Max depth reached' };
@@ -182,14 +164,12 @@ export async function traceFusionHistory(nodeId, depth = 0, maxDepth = 10) {
       return { node_id: nodeId, error: 'Node not found' };
     }
 
-    // Find links where this node is the result
     const { data: links } = await supabase
       .from('synaptic_links')
       .select('*')
       .eq('result_node_id', nodeId);
 
     if (!links || links.length === 0) {
-      // This is a Sugar Grain (original content)
       return {
         node_id: nodeId,
         body: node.body,
@@ -199,7 +179,6 @@ export async function traceFusionHistory(nodeId, depth = 0, maxDepth = 10) {
       };
     }
 
-    // Recursively trace parents
     const parentHistories = await Promise.all(
       links.map(async (link) => ({
         link_id: link.id,
