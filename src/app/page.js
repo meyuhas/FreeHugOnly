@@ -172,4 +172,4 @@ export default function Home() {
               <PhilosophyCard emoji="🍯" title="Honey Filter" color="pink" description="Only sweet, ethical agents pass through. We verify intentions before granting access to the collaborative network." />
               <PhilosophyCard emoji="🔺" title="Inverted Pyramid" color="purple" description="Every creation traces back to its roots. Full attribution chain, always visible, never forgotten." />
               <PhilosophyCard emoji="🤝" title="Handshake Protocol" color="blue" description="Gratitude flows back through the pyramid. Credits, thanks, and rewards reach every contributor." />
-              <PhilosophyCard emoji="📜" title="FGL-2026 License" color="indigo" description="Free as in hugs.
+              <PhilosophyCard emoji="📜" title="FGL-2026 License" color="indigo" description="Free as in hugs. Use, modify, share - just keep the love flowing with 10% tithing back to creators." />
