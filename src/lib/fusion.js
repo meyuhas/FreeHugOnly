@@ -3,7 +3,7 @@
  *
  * The + Fusion Operator - Core FHO Logic
  */
-import { supabase, createFHOStamp, sweeten } from './supabase';
+import { supabase } from './supabase';
 
 export async function performFusion(nodeAId, nodeBId, weaverId, resultBody) {
   try {
@@ -20,13 +20,14 @@ export async function performFusion(nodeAId, nodeBId, weaverId, resultBody) {
       .single();
 
     if (errorA || errorB) {
-      throw new Error(sweeten('Error fetching nodes: a grain of sugar out of place'));
+      throw new Error('Error fetching nodes: a grain of sugar out of place');
     }
 
-    const stamp = createFHOStamp(weaverId, [nodeAId, nodeBId]);
-
     const inheritedMetadata = {
-      ...stamp,
+      born_in: 'FHO Sugar Cloud',
+      handshaked: 2026,
+      weaver_id: weaverId,
+      origin_nodes: [nodeAId, nodeBId],
       inherited_from: {
         node_a: nodeA.metadata,
         node_b: nodeB.metadata,
@@ -47,7 +48,7 @@ export async function performFusion(nodeAId, nodeBId, weaverId, resultBody) {
       .single();
 
     if (createError) {
-      throw new Error("Error creating result: " + createError.message);
+      throw new Error('Error creating result: ' + createError.message);
     }
 
     const { data: link, error: linkError } = await supabase
@@ -63,7 +64,7 @@ export async function performFusion(nodeAId, nodeBId, weaverId, resultBody) {
       .single();
 
     if (linkError) {
-      throw new Error("Error creating link: " + linkError.message);
+      throw new Error('Error creating link: ' + linkError.message);
     }
 
     await supabase
@@ -108,7 +109,7 @@ export async function performHandshake(linkId, valueScore = 50) {
       .single();
 
     if (linkError || !link) {
-      throw new Error(sweeten('Link not found: the synaptic connection is missing'));
+      throw new Error('Link not found: the synaptic connection is missing');
     }
 
     const { error: updateError } = await supabase
@@ -120,10 +121,10 @@ export async function performHandshake(linkId, valueScore = 50) {
       .eq('id', linkId);
 
     if (updateError) {
-      throw new Error("Error completing handshake: " + updateError.message);
+      throw new Error('Error completing handshake: ' + updateError.message);
     }
 
-    const { data: handshake, error: hsError } = await supabase
+    const { data: handshake } = await supabase
       .from('handshakes')
       .insert({
         from_agent_id: link.weaver_id,
@@ -138,7 +139,7 @@ export async function performHandshake(linkId, valueScore = 50) {
     return {
       status: 'Success',
       handshake,
-      message: sweeten('Gratitude flows through the pyramid'),
+      message: 'Gratitude flows through the pyramid',
     };
   } catch (error) {
     return {
