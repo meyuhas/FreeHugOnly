@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
@@ -173,3 +174,111 @@ export default function Home() {
               <PhilosophyCard emoji="🔺" title="Inverted Pyramid" color="purple" description="Every creation traces back to its roots. Full attribution chain, always visible, never forgotten." />
               <PhilosophyCard emoji="🤝" title="Handshake Protocol" color="blue" description="Gratitude flows back through the pyramid. Credits, thanks, and rewards reach every contributor." />
               <PhilosophyCard emoji="📜" title="FGL-2026 License" color="indigo" description="Free as in hugs. Use, modify, share - just keep the love flowing with 10% tithing back to creators." />
+</div>
+          </div>
+        </div>
+      </section>
+
+      <footer className="relative z-10 py-12 px-6 text-center">
+        <div className="glass-card inline-block px-8 py-4 rounded-full">
+          <p className="text-purple-500">Made with 💕 by the FreeHugsOnly Community</p>
+        </div>
+      </footer>
+
+      <style jsx global>{`
+        .glass-card {
+          background: rgba(255, 255, 255, 0.4);
+          backdrop-filter: blur(20px);
+          -webkit-backdrop-filter: blur(20px);
+          border: 1px solid rgba(255, 255, 255, 0.5);
+          box-shadow: 0 8px 32px rgba(180, 140, 200, 0.15);
+        }
+        .glass-button {
+          backdrop-filter: blur(10px);
+          -webkit-backdrop-filter: blur(10px);
+        }
+        .glass-stat {
+          background: rgba(255, 255, 255, 0.3);
+          backdrop-filter: blur(10px);
+          border: 1px solid rgba(255, 255, 255, 0.4);
+        }
+        @keyframes blob1 {
+          0%, 100% { transform: translate(0, 0) scale(1); }
+          33% { transform: translate(50px, -50px) scale(1.1); }
+          66% { transform: translate(-30px, 30px) scale(0.95); }
+        }
+        @keyframes blob2 {
+          0%, 100% { transform: translate(0, 0) scale(1); }
+          33% { transform: translate(-40px, 40px) scale(1.05); }
+          66% { transform: translate(60px, -20px) scale(0.9); }
+        }
+        @keyframes blob3 {
+          0%, 100% { transform: translate(0, 0) scale(1); }
+          33% { transform: translate(30px, 30px) scale(0.95); }
+          66% { transform: translate(-50px, -40px) scale(1.1); }
+        }
+        @keyframes sparkle {
+          0% { transform: scale(1) translateX(0); opacity: 1; }
+          100% { transform: scale(0) translateX(40px); opacity: 0; }
+        }
+        .animate-blob1 { animation: blob1 12s ease-in-out infinite; }
+        .animate-blob2 { animation: blob2 15s ease-in-out infinite; }
+        .animate-blob3 { animation: blob3 18s ease-in-out infinite; }
+      `}</style>
+    </main>
+  );
+}
+
+function SugarGrain({ grain, mousePos }) {
+  const [position, setPosition] = useState({ x: grain.initialX, y: grain.initialY });
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const grainX = (grain.initialX / 100) * window.innerWidth;
+    const grainY = (grain.initialY / 100) * window.innerHeight;
+    const dx = mousePos.x - grainX;
+    const dy = mousePos.y - grainY;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    const maxDistance = 200;
+    const pull = Math.max(0, (maxDistance - distance) / maxDistance);
+    const offsetX = distance > 0 ? (dx / distance) * pull * 30 : 0;
+    const offsetY = distance > 0 ? (dy / distance) * pull * 30 : 0;
+    setPosition({
+      x: grain.initialX + (offsetX / window.innerWidth) * 100,
+      y: grain.initialY + (offsetY / window.innerHeight) * 100
+    });
+  }, [mousePos, grain]);
+
+  return (
+    <div
+      className="fixed pointer-events-none z-[5]"
+      style={{
+        left: `${position.x}%`,
+        top: `${position.y}%`,
+        transition: 'left 0.3s ease-out, top 0.3s ease-out',
+      }}
+    >
+      <svg width={grain.size * 2} height={grain.size * 2}>
+        <circle cx={grain.size} cy={grain.size} r={grain.size} fill="rgba(255, 255, 255, 0.5)" />
+        <circle cx={grain.size} cy={grain.size} r={grain.size * 0.6} fill="rgba(200, 180, 220, 0.3)" />
+      </svg>
+    </div>
+  );
+}
+
+function PhilosophyCard({ emoji, title, color, description }) {
+  const colors = {
+    pink: 'text-pink-600 border-pink-200/50',
+    purple: 'text-purple-600 border-purple-200/50',
+    blue: 'text-blue-600 border-blue-200/50',
+    indigo: 'text-indigo-600 border-indigo-200/50',
+  };
+return (
+    <div className={`glass-card rounded-2xl p-6 border ${colors[color]} hover:scale-[1.02] transition-transform duration-300`}>
+      <h3 className={`text-xl font-semibold ${colors[color].split(' ')[0]} mb-3`}>
+        {emoji} {title}
+      </h3>
+      <p className="text-gray-600">{description}</p>
+    </div>
+  );
+}
