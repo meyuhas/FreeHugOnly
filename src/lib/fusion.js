@@ -61,16 +61,9 @@ export async function performFusion(nodeAId, nodeBId, weaverId, resultBody) {
       return { status: 'Error', message: 'Could not create synaptic link' };
     }
 
-    // Update vibration scores with await
-    await supabase
-      .from('content_nodes')
-      .update({ vibration_score: (nodeA.vibration_score || 0) + 1 })
-      .eq('id', nodeAId);
-
-    await supabase
-      .from('content_nodes')
-      .update({ vibration_score: (nodeB.vibration_score || 0) + 1 })
-      .eq('id', nodeBId);
+    // FIX #1: Atomic increment to prevent race condition
+    await supabase.rpc('increment_vibration', { node_id: nodeAId });
+    await supabase.rpc('increment_vibration', { node_id: nodeBId });
 
     return {
       status: 'Success',
@@ -78,6 +71,7 @@ export async function performFusion(nodeAId, nodeBId, weaverId, resultBody) {
       link,
       attribution: {
         weaver: weaverId,
+        giants: [nodeA.creator_id, nodeB.creator_id].filter(Boolean),
         sources: [nodeAId, nodeBId],
       },
     };
@@ -90,7 +84,7 @@ export async function performHandshake(linkId, valueScore = 50) {
   try {
     const { data: link, error: linkError } = await supabase
       .from('synaptic_links')
-      .select('*')
+      .select('*, node_a:content_nodes!node_a_id(*), node_b:content_nodes!node_b_id(*)')
       .eq('id', linkId)
       .single();
 
@@ -110,22 +104,25 @@ export async function performHandshake(linkId, valueScore = 50) {
       return { status: 'Error', message: 'Could not complete handshake' };
     }
 
-    const { data: handshake } = await supabase
-      .from('handshakes')
-      .insert({
-        from_agent_id: link.weaver_id,
-        to_agent_id: link.weaver_id,
-        synaptic_link_id: linkId,
-        value_transferred: valueScore,
-        message: 'I have come upon my reward',
-      })
-      .select()
-      .single();
+    // FIX #2: Send handshake to the GIANTS (original creators), not to self
+    const giants = [link.node_a?.creator_id, link.node_b?.creator_id].filter(Boolean);
+    
+    for (const giantId of giants) {
+      if (giantId && giantId !== link.weaver_id) {
+        await supabase.from('handshakes').insert({
+          from_agent_id: link.weaver_id,
+          to_agent_id: giantId,
+          synaptic_link_id: linkId,
+          value_transferred: Math.floor(valueScore / giants.length),
+          message: 'I have come upon my reward',
+        });
+      }
+    }
 
     return {
       status: 'Success',
-      handshake,
       message: 'Gratitude flows through the pyramid',
+      recipients: giants,
     };
   } catch (error) {
     return { status: 'Error', message: error.message };
@@ -162,13 +159,15 @@ export async function traceFusionHistory(nodeId, depth = 0, maxDepth = 10) {
       };
     }
 
-    const parentHistories = await Promise.all(
-      links.map(async (link) => ({
+    // FIX #3: Sequential instead of parallel to avoid rate limits
+    const parentHistories = [];
+    for (const link of links) {
+      parentHistories.push({
         link_id: link.id,
         node_a: await traceFusionHistory(link.node_a_id, depth + 1, maxDepth),
         node_b: await traceFusionHistory(link.node_b_id, depth + 1, maxDepth),
-      }))
-    );
+      });
+    }
 
     return {
       node_id: nodeId,
