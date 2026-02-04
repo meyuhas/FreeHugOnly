@@ -53,14 +53,3 @@ async function traceNode(nodeId, depth = 0) {
 
   return result;
 }
-```
-
----
-
-**מבנה התיקיות שצריך ליצור:**
-```
-src/app/api/
-├── feed/
-│   └── route.js
-└── trace/
-    └── route.js
