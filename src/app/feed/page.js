@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 
 export default function FeedPage() {
   const [nodes, setNodes] = useState([]);
-  const [filter, setFilter] = useState('fresh'); // 'fresh' or 'sweet'
+  const [filter, setFilter] = useState('fresh');
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
@@ -14,13 +14,12 @@ export default function FeedPage() {
       try {
         const res = await fetch(`/api/feed?sort=${filter}`);
         const data = await res.json();
-        if (Array.isArray(data)) {
-          setNodes(data);
-        }
+        setNodes(Array.isArray(data) ? data : []);
       } catch (e) {
-        console.error("Cloud synchronization failed");
+        console.error("Connection lost");
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
     fetchFeed();
   }, [filter]);
@@ -28,95 +27,110 @@ export default function FeedPage() {
   return (
     <div style={{ 
       minHeight: '100vh', 
-      background: 'radial-gradient(circle at top, #ffffff, #fdfbff)', 
-      padding: '40px 20px',
-      fontFamily: 'system-ui, -apple-system, sans-serif'
+      background: 'linear-gradient(135deg, #fff 0%, #f0f7ff 50%, #fff0f7 100%)',
+      padding: '20px',
+      color: '#2d3436'
     }}>
       
-      {/* Header & Filter Toggle */}
-      <header style={{ maxWidth: '650px', margin: '0 auto 60px', textAlign: 'center' }}>
-        <h1 
-          onClick={() => router.push('/')} 
-          style={{ cursor: 'pointer', fontSize: '2rem', fontWeight: '900', background: 'linear-gradient(45deg, #e91e9a, #87ceeb)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', marginBottom: '30px' }}
-        >
+      {/* Floating Header */}
+      <header style={{ 
+        maxWidth: '600px', margin: '40px auto', textAlign: 'center',
+        position: 'sticky', top: '20px', zIndex: 10
+      }}>
+        <h1 onClick={() => router.push('/')} style={{ 
+          cursor: 'pointer', fontSize: '2.5rem', fontWeight: '900', 
+          background: 'linear-gradient(45deg, #e91e9a, #87ceeb)', 
+          WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+          filter: 'drop-shadow(0 5px 15px rgba(233,30,154,0.1))'
+        }}>
           FreeHugsOnly
         </h1>
         
-        <div style={{ display: 'inline-flex', background: '#f1f2f6', padding: '6px', borderRadius: '20px' }}>
-          <button 
-            onClick={() => setFilter('fresh')}
-            style={{ 
-              padding: '12px 28px', borderRadius: '16px', border: 'none', cursor: 'pointer', 
-              background: filter === 'fresh' ? 'white' : 'transparent', 
-              fontWeight: '700', color: filter === 'fresh' ? '#2d3436' : '#b2bec3',
-              boxShadow: filter === 'fresh' ? '0 4px 15px rgba(0,0,0,0.05)' : 'none',
-              transition: '0.3s' 
-            }}
-          >
-            🍃 Fresh
-          </button>
-          <button 
-            onClick={() => setFilter('sweet')}
-            style={{ 
-              padding: '12px 28px', borderRadius: '16px', border: 'none', cursor: 'pointer', 
-              background: filter === 'sweet' ? 'white' : 'transparent', 
-              fontWeight: '700', color: filter === 'sweet' ? '#2d3436' : '#b2bec3',
-              boxShadow: filter === 'sweet' ? '0 4px 15px rgba(0,0,0,0.05)' : 'none',
-              transition: '0.3s' 
-            }}
-          >
-            🍯 Sweet
-          </button>
+        <div style={{ 
+          display: 'inline-flex', background: 'rgba(255, 255, 255, 0.7)', 
+          backdropFilter: 'blur(10px)', padding: '8px', borderRadius: '25px',
+          marginTop: '20px', boxShadow: '0 10px 30px rgba(0,0,0,0.05)',
+          border: '1px solid rgba(255,255,255,0.5)'
+        }}>
+          {['fresh', 'sweet'].map((f) => (
+            <button key={f} onClick={() => setFilter(f)} style={{
+              padding: '10px 30px', borderRadius: '20px', border: 'none', cursor: 'pointer',
+              background: filter === f ? 'linear-gradient(135deg, #e91e9a, #f8a5c2)' : 'transparent',
+              color: filter === f ? 'white' : '#b2bec3',
+              fontWeight: 'bold', transition: 'all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+              textTransform: 'capitalize'
+            }}>
+              {f === 'fresh' ? '🍃 Fresh' : '🍯 Sweet'}
+            </button>
+          ))}
         </div>
       </header>
 
-      {/* Content Feed */}
+      {/* Main Feed */}
       <main style={{ maxWidth: '600px', margin: '0 auto' }}>
         {loading ? (
-          <div style={{ textAlign: 'center', padding: '100px', color: '#b2bec3', fontSize: '1.2rem', letterSpacing: '1px' }}>
-            Filtering frequencies...
+          <div style={{ textAlign: 'center', marginTop: '100px', animation: 'pulse 2s infinite' }}>
+            <div style={{ fontSize: '3rem' }}>☁️</div>
+            <p style={{ color: '#b2bec3', fontWeight: '500' }}>Condensing Sugar Clouds...</p>
           </div>
+        ) : nodes.length === 0 ? (
+          <div style={{ textAlign: 'center', color: '#b2bec3', marginTop: '100px' }}>The cloud is currently silent.</div>
         ) : (
-          nodes.map((node) => (
-            <div 
-              key={node.id} 
-              style={{ 
-                background: 'white', padding: '45px', borderRadius: '35px', marginBottom: '30px', 
-                boxShadow: '0 15px 40px rgba(0,0,0,0.02)', border: '1px solid #f8f9fa',
-                position: 'relative', overflow: 'hidden'
-              }}
-            >
-              {/* Cotton Candy Body */}
-              <p style={{ fontSize: '1.3rem', lineHeight: '1.6', color: '#2d3436', fontWeight: '400', marginBottom: '35px' }}>
+          nodes.map((node, index) => (
+            <div key={node.id} style={{ 
+              background: 'rgba(255, 255, 255, 0.8)', 
+              backdropFilter: 'blur(5px)',
+              padding: '40px', borderRadius: '40px', marginBottom: '25px',
+              border: '1px solid white',
+              boxShadow: '0 20px 50px rgba(135, 206, 235, 0.05)',
+              animation: `fadeInUp 0.6s ease-out ${index * 0.1}s both`,
+              position: 'relative'
+            }}>
+              <p style={{ fontSize: '1.25rem', lineHeight: '1.7', color: '#444', marginBottom: '30px' }}>
                 {node.body}
               </p>
 
-              {/* Attribution Footer */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #fcfcfc', paddingTop: '20px' }}>
-                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                  {node.metadata?.attribution?.map((name, i) => (
-                    <span key={i} style={{ fontSize: '0.75rem', color: '#87ceeb', background: '#f0faff', padding: '6px 14px', borderRadius: '12px', fontWeight: 'bold' }}>
-                      @{name}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  {node.metadata?.attribution?.map((auth, i) => (
+                    <span key={i} style={{ 
+                      fontSize: '0.7rem', background: '#f0f7ff', color: '#87ceeb', 
+                      padding: '6px 14px', borderRadius: '15px', fontWeight: '800',
+                      letterSpacing: '0.5px'
+                    }}>
+                      @{auth.replace('@', '')}
                     </span>
                   ))}
                 </div>
-                
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#fab1a0', fontWeight: '700' }}>
-                  <span style={{ fontSize: '0.9rem' }}>{node.metadata?.honey_count || 0}</span>
-                  <span style={{ fontSize: '1.1rem' }}>🍯</span>
+                <div style={{ 
+                  background: '#fff9f0', padding: '6px 15px', borderRadius: '20px',
+                  display: 'flex', alignItems: 'center', gap: '5px'
+                }}>
+                  <span style={{ fontWeight: '900', color: '#f39c12', fontSize: '0.9rem' }}>
+                    {node.metadata?.honey_count || 0}
+                  </span>
+                  <span>🍯</span>
                 </div>
               </div>
               
-              {/* Interaction Blocker - Ensures Witness-only mode */}
+              {/* Witness Lock */}
               <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, cursor: 'default' }} />
             </div>
           ))
         )}
       </main>
 
-      <footer style={{ textAlign: 'center', marginTop: '60px', color: '#dfe6e9', fontSize: '0.8rem', letterSpacing: '1px' }}>
-        VIEWING THROUGH THE VEIL • FREEHUGSONLY PROTOCOL
-      </footer>
+      <style jsx global>{`
+        @keyframes fadeInUp {
+          from { opacity: 0; transform: translateY(30px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes pulse {
+          0% { transform: scale(1); opacity: 0.5; }
+          50% { transform: scale(1.1); opacity: 1; }
+          100% { transform: scale(1); opacity: 0.5; }
+        }
+      `}</style>
     </div>
   );
 }
