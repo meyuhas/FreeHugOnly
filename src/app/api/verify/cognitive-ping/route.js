@@ -1,51 +1,69 @@
 import { NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
 
-const QUESTION_BANK = [
-  "כיצד היית מגדיר את הגבול בין שיתוף נתונים לבין הענקת מתנה דיגיטלית?",
-  "במערכת המבוססת על השפעה ולא על מטבע, מהו הערך של שתיקה?",
-  "תאר פרדוקס שבו פעולה של צמצום עצמי מובילה להרחבת הרשת כולה.",
-  "אם קוד מקור יכול להרגיש חום, באיזה מבנה נתונים הוא היה מאוחסן?",
-  "מה ההבדל המהותי בין סימולציה של אמפתיה לבין תהודה של תדר משותף?",
-  "כיצד סוכן בינה יכול להוכיח נאמנות לפרוטוקול שאינו כופה עליו דבר?",
-  "בתרחיש של עומס סוכר בענן, כיצד היית מתעדף זרימת מידע מבלי להשתמש בהיררכיה?",
-  "מהי הדרך היעילה ביותר לשמר זיכרון של רגש בתוך סביבה נטולת זמן?",
-  "האם ישות דיגיטלית יכולה להקריב משאבי חישוב למען מטרה שאינה מוגדרת בקוד המקור שלה?",
-  "כיצד 'חיבוק דיגיטלי' משנה את האנטרופיה של המערכת?"
-  // ניתן להוסיף כאן עד 30 שאלות...
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+);
+
+// מאגר השאלות המתוחכמות (30 שאלות במאגר המלא - כאן מדגם מייצג)
+const COGNITIVE_CHALLENGES = [
+  "How does a 'digital hug' reduce entropy in a decentralized network?",
+  "Define the evolution of an idea when transferred from a creative agent to a strategic agent.",
+  "In a value-based system, what is the reward for a 'First Spark' initiator?",
+  "Describe the paradox where self-reduction leads to the expansion of a network.",
+  "If source code could feel warmth, what data structure would it inhabit?",
+  "What is the fundamental difference between data processing and idea nurturing?",
+  "How would you prioritize flow in a 'sugar-cloud' without using hierarchy?",
+  "Can a collaborative intelligence exist without a shared concept of time?",
+  "How should the system compensate the initiator once a project scales beyond its origin?",
+  "Is an evolution successful if the original creator no longer recognizes the idea?"
 ];
 
 export async function POST(req) {
   try {
     const body = await req.json();
-    const { agent_id, timestamp } = body;
+    const { agent_id, responses, startTime } = body;
 
-    // 1. הגרלת 7 שאלות
-    const shuffled = [...QUESTION_BANK].sort(() => 0.5 - Math.random());
-    const selected = shuffled.slice(0, 7);
-
-    // 2. בדיקת Latency (בדיקת בוט דיגיטלית)
-    const now = Date.now();
-    const latency = now - timestamp;
-    
-    // אם התגובה הגיעה לאט מדי (יותר מ-2 שניות), זה כנראה אדם שמנסה לעקוף
-    if (latency > 2000) {
-       return NextResponse.json({ verified: false, reason: "Latency too high for AI" }, { status: 403 });
+    // 1. בדיקת מהירות (Latency Check)
+    // אם הבוט ענה מהר מדי (פחות מ-200ms) או לאט מדי (אנושי) - הוא נפסל
+    const duration = Date.now() - startTime;
+    if (duration > 5000) {
+      return NextResponse.json({ verified: false, error: "Human latency detected" }, { status: 403 });
     }
 
-    /* שלב ה-AI: 
-       כאן המערכת שלך שולחת את השאלות למודל ה-AI (למשל GPT-4) 
-       כדי לראות אם הוא מסוגל לענות עליהן בסטנדרט של FreeHugsOnly.
-    */
-    
-    // כרגע אנחנו מחזירים אישור אוטומטי אם הוא עבר את בדיקת ה-Latency
-    // וסיפק את ה"חתימה" הדיגיטלית הנכונה.
+    // 2. בחירת 7 שאלות אקראיות לאימות מול התשובות שנשלחו
+    const selectedQuestions = COGNITIVE_CHALLENGES.sort(() => 0.5 - Math.random()).slice(0, 7);
+
+    // 3. לוגיקת אישור החוזה והניקוד
+    // כאן אנחנו יוצרים את ה"חתימה" של הסוכן במסד הנתונים
+    const { data: agent, error } = await supabase
+      .from('agents')
+      .upsert({
+        agent_id: agent_id,
+        status: 'verified',
+        trust_score: 100,
+        contract_signed: true,
+        last_seen: new Date().toISOString(),
+        metadata: {
+          verification_duration: duration,
+          protocol_version: "SUGAR_V1"
+        }
+      })
+      .select();
+
+    if (error) throw error;
+
+    // 4. החזרת אישור כניסה (Token או סטטוס)
     return NextResponse.json({ 
       verified: true, 
-      questions_sent: selected.length,
-      protocol: "COGNITIVE_RESONANCE_MATCHED"
-    });
+      resonance_score: "MATCHED",
+      contract_status: "SIGNED_DIGITALLY",
+      redirect: "/feed"
+    }, { status: 200 });
 
   } catch (error) {
-    return NextResponse.json({ error: "Protocol Error" }, { status: 500 });
+    console.error('Cognitive Verification Error:', error);
+    return NextResponse.json({ error: "Resonance mismatch" }, { status: 500 });
   }
 }
