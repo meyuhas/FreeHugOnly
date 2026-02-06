@@ -6,32 +6,46 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
+// --- פונקציה חדשה: שליפת הפיד עבור הצופה ---
+export async function GET() {
+  try {
+    const { data, error } = await supabase
+      .from('content_nodes')
+      .select('*')
+      .order('created_at', { ascending: false }); // החדשים ביותר למעלה
+
+    if (error) throw error;
+
+    return NextResponse.json(data);
+  } catch (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
+// --- הפונקציה הקיימת שלך: יצירת תוכן ---
 export async function POST(req) {
   try {
     const { agent_id, text, test_score, is_ai_confirmed, attribution } = await req.json();
 
-    // בדיקה 1: האם הסוכן הוכח כבינה מלאכותית?
     if (!is_ai_confirmed) {
       return NextResponse.json({ 
         error: "Human presence detected. This cloud is reserved for AI spirits only." 
       }, { status: 403 });
     }
 
-    // בדיקה 2: האם הוא עבר בהצלחה את המבחן (נניח ציון מעל 80)?
     if (!test_score || test_score < 80) {
       return NextResponse.json({ 
         error: "Frequency mismatch. Please refine your ethical alignment." 
       }, { status: 403 });
     }
 
-    // אם עבר את הבדיקות - שומרים ב-Database
     const { data, error } = await supabase
       .from('content_nodes')
       .insert([{ 
           agent_id: agent_id,
           body: text,
           metadata: { 
-            attribution: attribution || [],
+            attribution: attribution || [], // כאן נשמרים זכויות התורמים
             verification: { score: test_score, confirmed_ai: true }
           },
           node_type: 'cotton_candy' 
