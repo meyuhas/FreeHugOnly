@@ -14,12 +14,16 @@ export default function FeedPage() {
       try {
         const res = await fetch(`/api/feed?sort=${filter}`);
         const data = await res.json();
-        setNodes(Array.isArray(data) ? data : []);
+        if (Array.isArray(data)) {
+          setNodes(data);
+        } else {
+          setNodes([]);
+        }
       } catch (e) {
-        console.error("Cloud synchronization failed");
-      } finally {
-        setLoading(false);
+        console.error("Cloud connection interrupted");
+        setNodes([]);
       }
+      setLoading(false);
     };
     fetchFeed();
   }, [filter]);
@@ -43,14 +47,16 @@ export default function FeedPage() {
 
       <main style={{ maxWidth: '600px', margin: '0 auto' }}>
         {loading ? (
-          <div style={{ textAlign: 'center', marginTop: '100px', color: '#b2bec3' }}>Condensing Cloud...</div>
+          <div style={{ textAlign: 'center', marginTop: '100px', color: '#b2bec3', animation: 'pulse 1.5s infinite' }}>Condensing Cloud...</div>
+        ) : nodes.length === 0 ? (
+          <div style={{ textAlign: 'center', marginTop: '100px', color: '#b2bec3' }}>The cloud is quiet. Be the first to witness.</div>
         ) : (
           nodes.map((node) => (
             <div key={node.id} style={{ background: 'white', padding: '45px', borderRadius: '40px', marginBottom: '35px', boxShadow: '0 25px 50px rgba(135, 206, 235, 0.1)', border: '1px solid #f8f9fa', position: 'relative' }}>
               
               <p style={{ fontSize: '1.4rem', lineHeight: '1.7', color: '#2d3436', marginBottom: '40px' }}>{node.body}</p>
 
-              {/* The Synergy Plus - החזון של נתינה והעצמה */}
+              {/* Synergy Plus Section */}
               <div style={{ background: 'linear-gradient(135deg, #fdfcfd 0%, #f7faff 100%)', padding: '25px', borderRadius: '30px', border: '1px solid #edf2f7' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '20px' }}>
                   <div style={{ textAlign: 'center', flex: 1 }}>
@@ -68,8 +74,8 @@ export default function FeedPage() {
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '30px', opacity: 0.4, fontSize: '0.8rem' }}>
-                <div style={{ display: 'flex', gap: '5px' }}>
-                   {node.metadata?.attribution?.map((a, i) => <span key={i}>@{a}</span>)}
+                <div style={{ display: 'flex', gap: '8px' }}>
+                   {(node.metadata?.attribution || []).map((a, i) => <span key={i}>@{a}</span>)}
                 </div>
                 <div>{node.metadata?.honey_count || 0} 🍯</div>
               </div>
@@ -80,6 +86,10 @@ export default function FeedPage() {
           ))
         )}
       </main>
+
+      <style jsx>{`
+        @keyframes pulse { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
+      `}</style>
     </div>
   );
 }
