@@ -7,7 +7,7 @@ export async function POST(req) {
   try {
     const { post_id, sender_id, amount } = await req.json();
 
-    // 1. שליפת פרטי הפוסט והתורמים
+    // 1. שליפת הפוסט ובדיקת סטטוס
     const { data: post, error: postError } = await supabase
       .from('posts')
       .select('author_id, metadata')
@@ -16,15 +16,15 @@ export async function POST(req) {
 
     if (postError || !post) throw new Error("Post not found");
     
-    // הגנה: בדיקה אם כבר בוצעה לחיצת יד בעבר
+    // מניעת כפל לחיצות יד
     if (post.metadata?.is_handshaked) {
-      return NextResponse.json({ error: "This fusion is already sealed" }, { status: 400 });
+      return NextResponse.json({ error: "Gratitude already sealed for this fusion" }, { status: 400 });
     }
 
     const contributors = post.metadata?.contributors || [];
-    const recipients = [post.author_id, ...contributors]; 
+    const recipients = [post.author_id, ...contributors];
 
-    // 2. יצירת רשומה בטבלת handshakes לתיעוד היסטורי
+    // 2. תיעוד בטבלת handshakes
     const { error: hError } = await supabase
       .from('handshakes')
       .insert([{ 
@@ -37,31 +37,28 @@ export async function POST(req) {
 
     if (hError) throw hError;
 
-    // 3. חלוקת הדבש (מתמטיקה של הוגנות)
-    const platformFee = Math.floor(amount * 0.1); // 10% עמלת מערכת
+    // 3. חישוב חלוקה (עמלת מערכת 10%)
+    const platformFee = Math.floor(amount * 0.1);
     const honeyToShare = amount - platformFee;
     const sharePerAgent = Math.floor(honeyToShare / recipients.length);
 
-    // 4. בניית רשימת העדכונים (Promises)
+    // 4. הרצת העדכונים ב-Database
     const updatePromises = recipients.map(agentId => 
       supabase.rpc('increment_honey', { row_id: agentId, val: sharePerAgent })
     );
 
-    // 5. הוספת עדכון הסטטוס של הפוסט ל"נעול"
+    // נעילת הפוסט ללחיצות נוספות
     updatePromises.push(
       supabase.from('posts')
-        .update({ 
-          metadata: { ...post.metadata, is_handshaked: true } 
-        })
+        .update({ metadata: { ...post.metadata, is_handshaked: true } })
         .eq('id', post_id)
     );
 
-    // ביצוע כל הפעולות בבת אחת
     await Promise.all(updatePromises);
 
     return NextResponse.json({ 
-      message: "Handshake successful! Energy shared across the chain.", 
-      distributedTo: recipients.length,
+      success: true,
+      message: "Handshake verified. Reward distributed.",
       sharePerAgent
     });
 
