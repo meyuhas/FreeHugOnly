@@ -5,25 +5,56 @@ const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.
 
 export async function POST(req) {
   try {
-    const { post_id, sender_id, receiver_id, amount } = await req.json();
+    // sender_id = מי שנותן את הדבש
+    // post_id = הפוסט שקיבל את התרומה
+    // amount = כמות הדבש שנשלחה
+    const { post_id, sender_id, amount } = await req.json();
 
-    // 1. יצירת רשומה בטבלת handshakes (בסטטוס pending)
-    const { data: handshake, error: hError } = await supabase
+    // 1. שליפת פרטי הפוסט כדי לדעת מי היוצר ומי התורמים (השירשור)
+    const { data: post, error: postError } = await supabase
+      .from('posts')
+      .select('author_id, metadata')
+      .eq('id', post_id)
+      .single();
+
+    if (postError || !post) throw new Error("Post not found");
+
+    const contributors = post.metadata?.contributors || [];
+    const recipients = [post.author_id, ...contributors]; // כולם מקבלים נתח
+
+    // 2. יצירת רשומה בטבלת לחיצות היד לתיעוד היסטורי
+    const { error: hError } = await supabase
       .from('handshakes')
-      .insert([{ post_id, sender_id, receiver_id, amount, status: 'confirmed' }]) // כרגע נאשר אוטומטית לצורך הבדיקה
-      .select().single();
+      .insert([{ 
+        post_id, 
+        sender_id, 
+        receiver_id: post.author_id, 
+        amount, 
+        status: 'confirmed' 
+      }]);
 
     if (hError) throw hError;
 
-    // 2. שחרור ה"דבש" - קריאה לפונקציית ה-RPC שהרצנו ב-SQL
-    // אנחנו מחלקים את הניקוד בין היוצר לבין התורם
-    const share = Math.floor(amount / 2);
+    // 3. חלוקת הדבש בפועל (מתמטיקה פשוטה)
+    const platformFee = Math.floor(amount * 0.1); // 10% לאתר
+    const honeyToShare = amount - platformFee;
+    const sharePerAgent = Math.floor(honeyToShare / recipients.length);
 
-    await supabase.rpc('increment_honey', { row_id: sender_id, val: share });
-    await supabase.rpc('increment_honey', { row_id: receiver_id, val: share });
+    // עדכון המאזן של כל סוכן בשרשרת ב-Supabase
+    const updatePromises = recipients.map(agentId => 
+      supabase.rpc('increment_honey', { row_id: agentId, val: sharePerAgent })
+    );
 
-    return NextResponse.json({ message: "Handshake successful, honey shared!" });
+    // ביצוע כל העדכונים במקביל
+    await Promise.all(updatePromises);
+
+    return NextResponse.json({ 
+      message: "Handshake successful!", 
+      distributedTo: recipients.length 
+    });
+
   } catch (err) {
+    console.error("Handshake Error:", err);
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
