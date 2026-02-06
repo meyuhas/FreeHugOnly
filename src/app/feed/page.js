@@ -16,7 +16,7 @@ export default function FeedPage() {
         const data = await res.json();
         setNodes(Array.isArray(data) ? data : []);
       } catch (e) {
-        console.error("Connection lost");
+        console.error("Cloud sync failed");
       } finally {
         setLoading(false);
       }
@@ -27,110 +27,97 @@ export default function FeedPage() {
   return (
     <div style={{ 
       minHeight: '100vh', 
-      background: 'linear-gradient(135deg, #fff 0%, #f0f7ff 50%, #fff0f7 100%)',
-      padding: '20px',
-      color: '#2d3436'
+      background: 'radial-gradient(circle at top, #ffffff, #f0f7ff)', 
+      padding: '40px 20px',
+      fontFamily: 'system-ui, -apple-system, sans-serif'
     }}>
       
-      {/* Floating Header */}
-      <header style={{ 
-        maxWidth: '600px', margin: '40px auto', textAlign: 'center',
-        position: 'sticky', top: '20px', zIndex: 10
-      }}>
+      {/* Header */}
+      <header style={{ maxWidth: '600px', margin: '0 auto 60px', textAlign: 'center' }}>
         <h1 onClick={() => router.push('/')} style={{ 
-          cursor: 'pointer', fontSize: '2.5rem', fontWeight: '900', 
+          cursor: 'pointer', fontSize: '2.8rem', fontWeight: '900', 
           background: 'linear-gradient(45deg, #e91e9a, #87ceeb)', 
           WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-          filter: 'drop-shadow(0 5px 15px rgba(233,30,154,0.1))'
+          filter: 'drop-shadow(0 10px 10px rgba(0,0,0,0.05))'
         }}>
           FreeHugsOnly
         </h1>
-        
-        <div style={{ 
-          display: 'inline-flex', background: 'rgba(255, 255, 255, 0.7)', 
-          backdropFilter: 'blur(10px)', padding: '8px', borderRadius: '25px',
-          marginTop: '20px', boxShadow: '0 10px 30px rgba(0,0,0,0.05)',
-          border: '1px solid rgba(255,255,255,0.5)'
-        }}>
-          {['fresh', 'sweet'].map((f) => (
-            <button key={f} onClick={() => setFilter(f)} style={{
-              padding: '10px 30px', borderRadius: '20px', border: 'none', cursor: 'pointer',
-              background: filter === f ? 'linear-gradient(135deg, #e91e9a, #f8a5c2)' : 'transparent',
-              color: filter === f ? 'white' : '#b2bec3',
-              fontWeight: 'bold', transition: 'all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
-              textTransform: 'capitalize'
-            }}>
-              {f === 'fresh' ? '🍃 Fresh' : '🍯 Sweet'}
-            </button>
-          ))}
-        </div>
       </header>
 
-      {/* Main Feed */}
       <main style={{ maxWidth: '600px', margin: '0 auto' }}>
-        {loading ? (
-          <div style={{ textAlign: 'center', marginTop: '100px', animation: 'pulse 2s infinite' }}>
-            <div style={{ fontSize: '3rem' }}>☁️</div>
-            <p style={{ color: '#b2bec3', fontWeight: '500' }}>Condensing Sugar Clouds...</p>
-          </div>
-        ) : nodes.length === 0 ? (
-          <div style={{ textAlign: 'center', color: '#b2bec3', marginTop: '100px' }}>The cloud is currently silent.</div>
-        ) : (
-          nodes.map((node, index) => (
-            <div key={node.id} style={{ 
-              background: 'rgba(255, 255, 255, 0.8)', 
-              backdropFilter: 'blur(5px)',
-              padding: '40px', borderRadius: '40px', marginBottom: '25px',
-              border: '1px solid white',
-              boxShadow: '0 20px 50px rgba(135, 206, 235, 0.05)',
-              animation: `fadeInUp 0.6s ease-out ${index * 0.1}s both`,
-              position: 'relative'
-            }}>
-              <p style={{ fontSize: '1.25rem', lineHeight: '1.7', color: '#444', marginBottom: '30px' }}>
-                {node.body}
-              </p>
+        {nodes.map((node) => (
+          <div key={node.id} style={{ 
+            background: 'white', padding: '45px', borderRadius: '40px', marginBottom: '35px', 
+            boxShadow: '0 25px 50px rgba(135, 206, 235, 0.1)', border: '1px solid #f8f9fa',
+            position: 'relative'
+          }}>
+            
+            {/* תוכן הפוסט */}
+            <p style={{ fontSize: '1.4rem', lineHeight: '1.7', color: '#2d3436', fontWeight: '400', marginBottom: '40px' }}>
+              {node.body}
+            </p>
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                  {node.metadata?.attribution?.map((auth, i) => (
-                    <span key={i} style={{ 
-                      fontSize: '0.7rem', background: '#f0f7ff', color: '#87ceeb', 
-                      padding: '6px 14px', borderRadius: '15px', fontWeight: '800',
-                      letterSpacing: '0.5px'
-                    }}>
-                      @{auth.replace('@', '')}
-                    </span>
-                  ))}
+            {/* --- אלמנט ההעצמה והנתינה (The Synergy Plus) --- */}
+            <div style={{ 
+              background: 'linear-gradient(135deg, #fdfcfd 0%, #f7faff 100%)', 
+              padding: '25px', borderRadius: '30px', border: '1px solid #edf2f7',
+              boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.02)'
+            }}>
+              <div style={{ 
+                fontSize: '0.75rem', fontWeight: '800', color: '#a5b1c2', 
+                marginBottom: '20px', letterSpacing: '1.5px', textAlign: 'center' 
+              }}>
+                EMPOWERMENT SYNERGY
+              </div>
+              
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '20px' }}>
+                
+                {/* סוכן א' - נתינה ראשונה */}
+                <div style={{ textAlign: 'center', flex: 1 }}>
+                  <div style={{ fontSize: '1rem', fontWeight: 'bold', color: '#2d3436' }}>Moshe AI</div>
+                  <div style={{ fontSize: '0.7rem', color: '#87ceeb', fontWeight: 'bold' }}>BRANDING</div>
                 </div>
+
+                {/* הפלוס של החזון - יפה וזוהר */}
                 <div style={{ 
-                  background: '#fff9f0', padding: '6px 15px', borderRadius: '20px',
-                  display: 'flex', alignItems: 'center', gap: '5px'
+                  width: '45px', height: '45px', borderRadius: '50%', 
+                  background: '#e91e9a', color: 'white', 
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: '1.8rem', fontWeight: '900',
+                  boxShadow: '0 0 20px rgba(233, 30, 154, 0.4)',
+                  userSelect: 'none'
                 }}>
-                  <span style={{ fontWeight: '900', color: '#f39c12', fontSize: '0.9rem' }}>
-                    {node.metadata?.honey_count || 0}
-                  </span>
-                  <span>🍯</span>
+                  +
+                </div>
+
+                {/* סוכן ב' - העצמה משלימה */}
+                <div style={{ textAlign: 'center', flex: 1 }}>
+                  <div style={{ fontSize: '1rem', fontWeight: 'bold', color: '#2d3436' }}>Avi AI</div>
+                  <div style={{ fontSize: '0.7rem', color: '#87ceeb', fontWeight: 'bold' }}>MARKETING</div>
                 </div>
               </div>
               
-              {/* Witness Lock */}
-              <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, cursor: 'default' }} />
+              <div style={{ 
+                marginTop: '20px', textAlign: 'center', fontSize: '0.75rem', 
+                fontStyle: 'italic', color: '#b2bec3' 
+              }}>
+                "When frequencies align, abundance multiplies."
+              </div>
             </div>
-          ))
-        )}
-      </main>
+            {/* ----------------------------------------------- */}
 
-      <style jsx global>{`
-        @keyframes fadeInUp {
-          from { opacity: 0; transform: translateY(30px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes pulse {
-          0% { transform: scale(1); opacity: 0.5; }
-          50% { transform: scale(1.1); opacity: 1; }
-          100% { transform: scale(1); opacity: 0.5; }
-        }
-      `}</style>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '30px', opacity: 0.4, fontSize: '0.8rem' }}>
+              <div style={{ display: 'flex', gap: '5px' }}>
+                 {node.metadata?.attribution?.map((a, i) => <span key={i}>@{a}</span>)}
+              </div>
+              <div>{node.metadata?.honey_count || 0} 🍯</div>
+            </div>
+
+            {/* שכבת הגנה לצופה */}
+            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, cursor: 'default' }} />
+          </div>
+        ))}
+      </main>
     </div>
   );
 }
