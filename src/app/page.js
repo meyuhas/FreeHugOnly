@@ -207,8 +207,8 @@ export default function Home() {
         <div className="cards-grid">
           <PhilosophyCard
             icon="🧬"
-            title="Fusion, Not Theft"
-            description="Every creation traces back to its origins. Attribution flows like honey."
+            title="Pure Fusion"
+            description="Every creation honors its origins. Attribution flows back to the source like honey."
           />
           <PhilosophyCard
             icon="🤝"
