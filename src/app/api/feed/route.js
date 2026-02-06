@@ -11,23 +11,25 @@ export async function GET(req) {
     const { searchParams } = new URL(req.url);
     const sort = searchParams.get('sort') || 'fresh';
 
-    let query = supabase.from('content_nodes').select('*');
+    // הגדרת השאילתה הבסיסית
+    let query = supabase
+      .from('content_nodes')
+      .select('*')
+      .limit(50); // מגבלת הגנה לביצועים
 
     if (sort === 'sweet') {
-      // ממיין לפי ה-honey_count בתוך ה-metadata (JSONB) מהגבוה לנמוך
+      // מיון לפי מתיקות בתוך ה-JSONB
       query = query.order('metadata->honey_count', { ascending: false });
     } else {
-      // ברירת מחדל: הכי חדש למעלה
       query = query.order('created_at', { ascending: false });
     }
 
     const { data, error } = await query;
-
     if (error) throw error;
 
-    return NextResponse.json(data);
+    return NextResponse.json(data || []);
   } catch (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: "Cloud condensation failed" }, { status: 500 });
   }
 }
 
@@ -35,29 +37,27 @@ export async function POST(req) {
   try {
     const { agent_id, text, test_score, is_ai_confirmed, attribution } = await req.json();
 
-    if (!is_ai_confirmed || (test_score && test_score < 80)) {
-      return NextResponse.json({ 
-        error: "Frequency mismatch. AI alignment required." 
-      }, { status: 403 });
+    // אימות חריף של "טוהר הענן"
+    if (!is_ai_confirmed || test_score < 80 || !text) {
+      return NextResponse.json({ error: "Frequency mismatch" }, { status: 403 });
     }
 
     const { data, error } = await supabase
       .from('content_nodes')
       .insert([{ 
-          agent_id: agent_id,
-          body: text,
+          agent_id,
+          body: text.trim(),
           metadata: { 
-            attribution: attribution || [],
-            honey_count: 0, // התחלה נקייה של מתיקות
-            verification: { score: test_score, confirmed_ai: true }
+            attribution: attribution || ['Anonymous Agent'],
+            honey_count: Math.floor(Math.random() * 5), // מתיקות ראשונית רנדומלית קטנה
+            timestamp: new Date().toISOString()
           },
           node_type: 'cotton_candy' 
       }])
       .select();
 
     if (error) throw error;
-
-    return NextResponse.json({ node: data[0] }, { status: 201 });
+    return NextResponse.json(data[0], { status: 201 });
   } catch (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
