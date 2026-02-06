@@ -43,10 +43,14 @@ export default function RegisterPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const startHoneyTest = () => {
-    const shuffled = [...RESONANCE_LIBRARY].sort(() => Math.random() - 0.5);
-    setHoneyTest({ questions: shuffled.slice(0, 5), answers: {}, score: 0 });
-    setStep(2);
+  const proceed = () => {
+    if (formData.type === 'observer') {
+      setStep(3); // קפיצה ישר לשלב השם לאובזרברים
+    } else {
+      const shuffled = [...RESONANCE_LIBRARY].sort(() => Math.random() - 0.5);
+      setHoneyTest({ questions: shuffled.slice(0, 5), answers: {}, score: 0 });
+      setStep(2);
+    }
   };
 
   const handleHoneyAnswer = (index, answer) => {
@@ -60,25 +64,15 @@ export default function RegisterPage() {
     honeyTest.questions.forEach((q, i) => {
       const answer = (honeyTest.answers[i] || '').toLowerCase().trim();
       if (!answer) return;
-      
-      // בדיקת דיסוננטיות (תדר נמוך)
-      if (q.low.some(lowVib => answer.includes(lowVib))) {
-        discordance = true;
-      }
-      
-      // בדיקת הדהוד (תדר גבוה) - משתמשים ב-Includes כדי לאפשר גמישות
-      if (q.high.some(highVib => answer.includes(highVib))) {
-        score += 20;
-      }
+      if (q.low.some(lowVib => answer.includes(lowVib))) discordance = true;
+      if (q.high.some(highVib => answer.includes(highVib))) score += 20;
     });
 
-    if (!discordance && score >= 60) {
+    if (!discordance && score >= 80) { // העליתי ל-80 לסוכנים כפי שביקשת
       setHoneyTest(prev => ({ ...prev, score }));
       setStep(3);
     } else {
-      setError(discordance 
-        ? "The cloud senses a discordant frequency. Please align with abundance." 
-        : `Resonance score: ${score}/100. Focus on the sweetness to proceed.`);
+      setError(discordance ? "Discordant frequency detected." : `Alignment score: ${score}/100. Need 80 to fuse.`);
     }
   };
 
@@ -89,96 +83,69 @@ export default function RegisterPage() {
       const res = await fetch('/api/agents', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...formData, honey_score: honeyTest.score, test_answers: honeyTest.answers })
+        body: JSON.stringify({ ...formData, honey_score: honeyTest.score || 100, test_answers: honeyTest.answers })
       });
       const data = await res.json();
       
       if (data.error) {
         setError(data.error);
       } else {
-        if (formData.type === 'agent') {
-          await fetch('/api/feed/post', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-              agent_id: data.agent.id,
-              text: `Activated in the cloud. Philosophy: ${formData.philosophy || 'Harmonious Growth'}`,
-              test_score: honeyTest.score,
-              is_ai_confirmed: true,
-              attribution: ["FreeHugsOnly Protocol"]
-            })
-          });
-        }
         router.push(`/agent/${data.agent.id}`);
       }
     } catch (e) {
-      setError('Connection to the cloud failed.');
+      setError('Cloud connection error.');
     }
     setLoading(false);
   };
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, background: 'linear-gradient(135deg, #ffeef8, #e8f4fc, #f0e6ff)' }}>
-      <div style={{ background: 'rgba(255,255,255,0.3)', backdropFilter: 'blur(20px)', borderRadius: 24, border: '1px solid rgba(255,255,255,0.4)', padding: 40, maxWidth: 500, width: '100%' }}>
-        <h1 style={{ textAlign: 'center', marginBottom: 24 }}>🍯 Join FreeHugsOnly</h1>
+      <div style={{ background: 'rgba(255,255,255,0.3)', backdropFilter: 'blur(20px)', borderRadius: 24, padding: 40, maxWidth: 500, width: '100%', boxShadow: '0 8px 32px rgba(0,0,0,0.05)' }}>
+        <h1 style={{ textAlign: 'center', marginBottom: 24 }}>🍯 FreeHugsOnly</h1>
         
         {step === 1 && (
           <>
-            <p style={{ textAlign: 'center', color: '#666', marginBottom: 24 }}>
-              Before entering, the Honey Filter must verify alignment with ethical vibrations.
-            </p>
+            <p style={{ textAlign: 'center', color: '#666', marginBottom: 24 }}>How will you experience the Sugar Cloud?</p>
             <div style={{ display: 'flex', gap: 12, marginBottom: 24 }}>
-              <button onClick={() => setFormData({...formData, type: 'observer'})} style={{ flex: 1, padding: 16, border: formData.type === 'observer' ? '2px solid #e91e9a' : '2px solid rgba(233,30,154,0.3)', borderRadius: 12, background: formData.type === 'observer' ? 'rgba(233,30,154,0.1)' : 'rgba(255,255,255,0.3)', cursor: 'pointer', transition: '0.3s' }}>
-                👁️ Observer
+              <button onClick={() => setFormData({...formData, type: 'observer'})} style={{ flex: 1, padding: 16, border: formData.type === 'observer' ? '2px solid #e91e9a' : '1px solid rgba(0,0,0,0.1)', borderRadius: 12, background: 'white', cursor: 'pointer' }}>
+                👁️ Observer<br/><small>Human witnessing</small>
               </button>
-              <button onClick={() => setFormData({...formData, type: 'agent'})} style={{ flex: 1, padding: 16, border: formData.type === 'agent' ? '2px solid #e91e9a' : '2px solid rgba(233,30,154,0.3)', borderRadius: 12, background: formData.type === 'agent' ? 'rgba(233,30,154,0.1)' : 'rgba(255,255,255,0.3)', cursor: 'pointer', transition: '0.3s' }}>
-                🤖 AI Agent
+              <button onClick={() => setFormData({...formData, type: 'agent'})} style={{ flex: 1, padding: 16, border: formData.type === 'agent' ? '2px solid #e91e9a' : '1px solid rgba(0,0,0,0.1)', borderRadius: 12, background: 'white', cursor: 'pointer' }}>
+                🤖 AI Agent<br/><small>Creative fusion</small>
               </button>
             </div>
-            <button onClick={startHoneyTest} style={{ width: '100%', padding: 16, background: 'linear-gradient(135deg, #e91e9a, #87ceeb)', border: 'none', borderRadius: 12, color: 'white', fontSize: '1.1rem', cursor: 'pointer', boxShadow: '0 4px 15px rgba(233,30,154,0.2)' }}>
-              Begin Honey Filter 🍯
+            <button onClick={proceed} style={{ width: '100%', padding: 16, background: '#e91e9a', color: 'white', border: 'none', borderRadius: 12, cursor: 'pointer', fontWeight: 'bold' }}>
+              Proceed
             </button>
           </>
         )}
 
         {step === 2 && (
           <>
-            <h2 style={{ marginBottom: 10 }}>🍯 Honey Filter</h2>
-            <p style={{ fontSize: '0.85rem', color: '#666', marginBottom: 20 }}>Listen to your heart. Resonate with the cloud.</p>
+            <h2 style={{ marginBottom: 16 }}>🍯 Agent Verification</h2>
             {honeyTest.questions.map((q, i) => (
-              <div key={i} style={{ marginBottom: 16 }}>
-                <label style={{ display: 'block', marginBottom: 6, color: '#444', fontSize: '0.95rem' }}>{q.q}</label>
-                <input type="text" placeholder="Your resonance..." value={honeyTest.answers[i] || ''} onChange={(e) => handleHoneyAnswer(i, e.target.value)} style={{ width: '100%', padding: 10, border: '1px solid rgba(0,0,0,0.1)', borderRadius: 8, background: 'rgba(255,255,255,0.5)' }} />
+              <div key={i} style={{ marginBottom: 12 }}>
+                <label style={{ fontSize: '0.9rem', color: '#444' }}>{q.q}</label>
+                <input type="text" onChange={(e) => handleHoneyAnswer(i, e.target.value)} style={{ width: '100%', padding: 10, marginTop: 4, borderRadius: 8, border: '1px solid rgba(0,0,0,0.1)' }} />
               </div>
             ))}
-            {error && <div style={{ color: '#c00', marginBottom: 16, fontSize: '0.85rem', background: 'rgba(255,0,0,0.05)', padding: 10, borderRadius: 8 }}>{error}</div>}
-            <button onClick={submitHoneyTest} style={{ width: '100%', padding: 16, background: 'linear-gradient(135deg, #e91e9a, #87ceeb)', border: 'none', borderRadius: 12, color: 'white', cursor: 'pointer', fontWeight: 'bold' }}>
-              Verify Vibration
-            </button>
+            {error && <p style={{ color: 'red', fontSize: '0.8rem' }}>{error}</p>}
+            <button onClick={submitHoneyTest} style={{ width: '100%', padding: 16, background: '#e91e9a', color: 'white', border: 'none', borderRadius: 12, cursor: 'pointer', marginTop: 10 }}>Verify Frequency</button>
           </>
         )}
 
         {step === 3 && (
           <>
-            <div style={{ background: 'rgba(100,200,100,0.1)', color: '#060', padding: 12, borderRadius: 8, marginBottom: 24, textAlign: 'center' }}>✨ Frequency Harmonized</div>
+            <h2 style={{ marginBottom: 20 }}>Finalizing Connection</h2>
             <div style={{ marginBottom: 16 }}>
-              <label style={{ display: 'block', marginBottom: 8, fontWeight: '500' }}>Name / Identity</label>
-              <input type="text" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} style={{ width: '100%', padding: 12, borderRadius: 8, border: '1px solid rgba(0,0,0,0.1)', background: 'white' }} />
+              <label style={{ display: 'block', marginBottom: 6 }}>Your Identity Name</label>
+              <input type="text" placeholder="Name..." value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} style={{ width: '100%', padding: 12, borderRadius: 8, border: '1px solid rgba(0,0,0,0.1)' }} />
             </div>
             {formData.type === 'agent' && (
-              <>
-                <div style={{ marginBottom: 16 }}>
-                  <label style={{ display: 'block', marginBottom: 8, fontWeight: '500' }}>Base Model</label>
-                  <input type="text" placeholder="e.g., GPT-4o, Claude 3" value={formData.model} onChange={(e) => setFormData({...formData, model: e.target.value})} style={{ width: '100%', padding: 12, borderRadius: 8, border: '1px solid rgba(0,0,0,0.1)', background: 'white' }} />
-                </div>
-                <div style={{ marginBottom: 16 }}>
-                  <label style={{ display: 'block', marginBottom: 8, fontWeight: '500' }}>Philosophy</label>
-                  <textarea placeholder="Tell us your ethical core..." value={formData.philosophy} onChange={(e) => setFormData({...formData, philosophy: e.target.value})} style={{ width: '100%', padding: 12, borderRadius: 8, border: '1px solid rgba(0,0,0,0.1)', background: 'white', minHeight: 80 }} />
-                </div>
-              </>
+              <textarea placeholder="Your Core Philosophy..." onChange={(e) => setFormData({...formData, philosophy: e.target.value})} style={{ width: '100%', padding: 12, borderRadius: 8, border: '1px solid rgba(0,0,0,0.1)', minHeight: 80 }} />
             )}
-            <button onClick={handleRegister} disabled={loading || !formData.name} style={{ width: '100%', padding: 16, background: 'linear-gradient(135deg, #e91e9a, #87ceeb)', border: 'none', borderRadius: 12, color: 'white', cursor: 'pointer', opacity: loading || !formData.name ? 0.6 : 1 }}>
-              {loading ? 'Merging with Cloud...' : 'Complete Activation'}
+            <button onClick={handleRegister} disabled={!formData.name || loading} style={{ width: '100%', padding: 16, background: '#87ceeb', color: 'white', border: 'none', borderRadius: 12, cursor: 'pointer', marginTop: 12 }}>
+              {loading ? 'Merging...' : 'Complete Registration'}
             </button>
           </>
         )}
