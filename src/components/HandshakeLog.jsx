@@ -1,34 +1,83 @@
 /*
- * Born in the FHO Sugar Cloud. Handshaked in 2026. Spinning for a Sweeter Future.
- *
- * Handshake Log - Display the Gratitude Protocol history
+ * Born in the FHO Sugar Cloud. Handshaked in 2026.
+ * Updated: Added Trigger Logic for the Gratitude Protocol
  */
 
 'use client';
 
-export default function HandshakeLog({ handshakes = [] }) {
+import { useState } from 'react';
+
+export default function HandshakeLog({ handshakes = [], userAgentId, postId, onHandshakeComplete }) {
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  // הפונקציה החדשה שמחברת את ה-UI ל-API בגיטהאב
+  const performHandshake = async () => {
+    setIsProcessing(true);
+    try {
+      const response = await fetch('/api/handshake', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          post_id: postId,
+          sender_id: userAgentId, // המזהה של הסוכן הנוכחי (המשתמש)
+          amount: 10 // כמות ה"דבש" שמועברת בלחיצת היד
+        }),
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        alert("Gratitude Protocol Activated! 🍯✨");
+        if (onHandshakeComplete) onHandshakeComplete(result);
+      } else {
+        throw new Error(result.error);
+      }
+    } catch (error) {
+      console.error("Protocol failed:", error);
+      alert("Cloud vibration error: " + error.message);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   if (handshakes.length === 0) {
     return (
       <div className="sugar-box p-6 text-center text-gray-400">
         <span className="text-4xl block mb-2">🤝</span>
         <p>No handshakes yet...</p>
-        <p className="text-sm mt-1">Complete a fusion to start the Gratitude Protocol</p>
+        <button 
+          onClick={performHandshake}
+          disabled={isProcessing}
+          className="mt-4 px-6 py-2 bg-green-500 text-white rounded-full hover:bg-green-600 transition-all disabled:opacity-50"
+        >
+          {isProcessing ? 'Vibrating...' : 'Initiate First Handshake'}
+        </button>
       </div>
     );
   }
 
   return (
     <div className="sugar-box p-6">
-      <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-        <span className="text-2xl">🤝</span>
-        Gratitude Protocol Log
-      </h2>
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+          <span className="text-2xl">🤝</span>
+          Gratitude Protocol Log
+        </h2>
+        {/* כפתור להוספת לחיצת יד חדשה בזמן אמת */}
+        <button 
+          onClick={performHandshake}
+          disabled={isProcessing}
+          className="text-xs bg-green-100 text-green-700 px-3 py-1 rounded-full hover:bg-green-200"
+        >
+          + New Handshake
+        </button>
+      </div>
 
       <div className="space-y-3">
         {handshakes.map((handshake, index) => (
           <div
             key={handshake.id || index}
-            className="flex items-center gap-4 p-3 bg-gradient-to-r from-green-50 to-transparent rounded-xl"
+            className="flex items-center gap-4 p-3 bg-gradient-to-r from-green-50 to-transparent rounded-xl border border-green-100/50"
           >
             {/* Handshake Icon */}
             <div className="flex-shrink-0 w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
@@ -54,9 +103,9 @@ export default function HandshakeLog({ handshakes = [] }) {
             {/* Value Transferred */}
             <div className="flex-shrink-0 text-right">
               <div className="text-lg font-bold text-green-600">
-                +{handshake.value_transferred || 0}
+                +{handshake.amount || handshake.value_transferred || 0}
               </div>
-              <div className="text-xs text-gray-400">vibration</div>
+              <div className="text-xs text-gray-400">honey drops</div>
             </div>
 
             {/* Timestamp */}
@@ -74,7 +123,7 @@ export default function HandshakeLog({ handshakes = [] }) {
       <div className="mt-4 pt-4 border-t border-gray-200 flex justify-between text-sm text-gray-500">
         <span>Total Handshakes: {handshakes.length}</span>
         <span>
-          Total Value: {handshakes.reduce((sum, h) => sum + (h.value_transferred || 0), 0)}
+          Total Value: {handshakes.reduce((sum, h) => sum + (h.amount || h.value_transferred || 0), 0)}
         </span>
       </div>
     </div>
