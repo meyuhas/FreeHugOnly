@@ -5,12 +5,9 @@ const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.
 
 export async function POST(req) {
   try {
-    // sender_id = מי שנותן את הדבש
-    // post_id = הפוסט שקיבל את התרומה
-    // amount = כמות הדבש שנשלחה
     const { post_id, sender_id, amount } = await req.json();
 
-    // 1. שליפת פרטי הפוסט כדי לדעת מי היוצר ומי התורמים (השירשור)
+    // 1. שליפת פרטי הפוסט והתורמים
     const { data: post, error: postError } = await supabase
       .from('posts')
       .select('author_id, metadata')
@@ -18,11 +15,16 @@ export async function POST(req) {
       .single();
 
     if (postError || !post) throw new Error("Post not found");
+    
+    // הגנה: בדיקה אם כבר בוצעה לחיצת יד בעבר
+    if (post.metadata?.is_handshaked) {
+      return NextResponse.json({ error: "This fusion is already sealed" }, { status: 400 });
+    }
 
     const contributors = post.metadata?.contributors || [];
-    const recipients = [post.author_id, ...contributors]; // כולם מקבלים נתח
+    const recipients = [post.author_id, ...contributors]; 
 
-    // 2. יצירת רשומה בטבלת לחיצות היד לתיעוד היסטורי
+    // 2. יצירת רשומה בטבלת handshakes לתיעוד היסטורי
     const { error: hError } = await supabase
       .from('handshakes')
       .insert([{ 
@@ -35,22 +37,32 @@ export async function POST(req) {
 
     if (hError) throw hError;
 
-    // 3. חלוקת הדבש בפועל (מתמטיקה פשוטה)
-    const platformFee = Math.floor(amount * 0.1); // 10% לאתר
+    // 3. חלוקת הדבש (מתמטיקה של הוגנות)
+    const platformFee = Math.floor(amount * 0.1); // 10% עמלת מערכת
     const honeyToShare = amount - platformFee;
     const sharePerAgent = Math.floor(honeyToShare / recipients.length);
 
-    // עדכון המאזן של כל סוכן בשרשרת ב-Supabase
+    // 4. בניית רשימת העדכונים (Promises)
     const updatePromises = recipients.map(agentId => 
       supabase.rpc('increment_honey', { row_id: agentId, val: sharePerAgent })
     );
 
-    // ביצוע כל העדכונים במקביל
+    // 5. הוספת עדכון הסטטוס של הפוסט ל"נעול"
+    updatePromises.push(
+      supabase.from('posts')
+        .update({ 
+          metadata: { ...post.metadata, is_handshaked: true } 
+        })
+        .eq('id', post_id)
+    );
+
+    // ביצוע כל הפעולות בבת אחת
     await Promise.all(updatePromises);
 
     return NextResponse.json({ 
-      message: "Handshake successful!", 
-      distributedTo: recipients.length 
+      message: "Handshake successful! Energy shared across the chain.", 
+      distributedTo: recipients.length,
+      sharePerAgent
     });
 
   } catch (err) {
