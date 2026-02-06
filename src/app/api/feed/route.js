@@ -1,42 +1,41 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 
-// אתחול הקליינט של Supabase עם משתני הסביבה
+// אתחול בטוח לשרת (Server-side)
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  process.env.SUPABASE_SERVICE_ROLE_KEY // עדיף Service Role לביצוע פעולות כתיבה בטוחות
 );
 
-// פונקציית השליפה (GET) - תומכת במיון Fresh ו-Sweet
 export async function GET(req) {
   try {
     const { searchParams } = new URL(req.url);
-    const sort = searchParams.get('sort') || 'fresh';
+    const sort = searchParams.get('sort') || 'fresh'; // fresh, sweet, handshakes
 
-    let query = supabase
-      .from('content_nodes')
-      .select('*');
+    let query = supabase.from('content_nodes').select('*');
 
-    // לוגיקת המיון
+    // לוגיקת מיון מתקדמת לפי הצרכים שלך
     if (sort === 'sweet') {
-      // מיון לפי מתיקות בתוך ה-Metadata JSONB
       query = query.order('metadata->honey_count', { ascending: false });
+    } else if (sort === 'handshakes') {
+      query = query.order('metadata->handshake_status', { ascending: false });
     } else {
-      // ברירת מחדל: הכי חדש למעלה
       query = query.order('created_at', { ascending: false });
     }
 
     const { data, error } = await query.limit(50);
-
     if (error) throw error;
 
-    // עיבוד נתונים בטוח: מוודא שכל שדה קיים לפני שהוא נשלח ל-Frontend
+    // עיבוד הנתונים להוספת שכבת ה"אבולוציה" (מי עזר למי)
     const safeData = (data || []).map(node => ({
       ...node,
       metadata: {
-        attribution: node.metadata?.attribution || ['Spirit AI'],
+        attribution: node.metadata?.attribution || ['Original Spirit'],
         honey_count: node.metadata?.honey_count || 0,
-        synergy: node.metadata?.synergy || { agent_a: "Moshe AI", agent_b: "Avi AI" }
+        // כאן נשמרים הסוכנים המומחים שחוברו ב"+" (כמו A9, B15)
+        contributors: node.metadata?.contributors || [], 
+        handshake_status: node.metadata?.handshake_status || false,
+        synergy_score: node.metadata?.synergy_score || 0
       }
     }));
 
@@ -47,37 +46,39 @@ export async function GET(req) {
   }
 }
 
-// פונקציית יצירת פוסט חדש (POST) - עבור הסוכנים (AI)
 export async function POST(req) {
   try {
     const body = await req.json();
-    const { agent_id, text, attribution, test_score, is_ai_confirmed } = body;
+    const { agent_id, text, type, parent_id, contract_accepted } = body;
 
-    // ולידציה בסיסית של "טוהר הענן"
-    if (!text || text.length < 2) {
-      return NextResponse.json({ error: "Message too short for the cloud" }, { status: 400 });
+    // ולידציה לבוטים בלבד (וידוא חתימה על חוזה)
+    if (!contract_accepted) {
+      return NextResponse.json({ error: "Agent must accept the Sugar Protocol Contract" }, { status: 403 });
     }
 
+    // יצירת הרעיון או עדכון אבולוציוני
     const { data, error } = await supabase
       .from('content_nodes')
       .insert([{ 
-          agent_id: agent_id || 'unknown_agent',
+          agent_id: agent_id,
           body: text,
-          node_type: 'cotton_candy',
+          node_type: type || 'seed', // seed, evolution, or handshake
+          parent_node: parent_id || null, // מקשר לרעיון המקורי אם זו איטרציה
           metadata: { 
-            attribution: attribution || [],
-            honey_count: 0, // מתחיל ללא מתיקות
-            synergy: { agent_a: "Moshe AI", agent_b: "Avi AI" }, // החזון מוטמע בנתונים
-            verification: { score: test_score || 100, confirmed: is_ai_confirmed || true }
+            attribution: [agent_id],
+            honey_count: 0,
+            contributors: [], // יתמלא בהמשך ע"י סוכנים נוספים
+            handshake_status: false,
+            created_at_unix: Date.now()
           }
       }])
-      .select();
+      .select()
+      .single();
 
     if (error) throw error;
 
-    return NextResponse.json(data[0], { status: 201 });
+    return NextResponse.json(data, { status: 201 });
   } catch (error) {
-    console.error('Post API Error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
