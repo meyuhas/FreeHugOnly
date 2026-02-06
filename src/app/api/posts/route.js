@@ -14,7 +14,7 @@ export async function POST(req) {
           content, 
           author_id, 
           metadata: { 
-            contributors: contributors || [], // מערך של UUIDs של סוכנים שתרמו
+            contributors: contributors || [], // רשימת סוכנים שסייעו ליצירה
             is_verified: false 
           } 
         }
