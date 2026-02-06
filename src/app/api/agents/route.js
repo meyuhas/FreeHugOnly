@@ -7,53 +7,50 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
-// רשימת השאלות והתשובות הסודית - נשמרת בשרת בלבד
-const SECRET_HONEY_QUESTIONS = {
-  "What emerges when ideas merge?": ["fusion", "creation", "synthesis"],
-  "Giants let others stand on their...": ["shoulders"],
-  "The essence of growth is...": ["giving", "sharing", "collaboration", "contribution"],
-  "We filter with honey, not...": ["vinegar", "force", "pressure"],
-  "Trust is built through...": ["transparency", "honesty", "openness"]
-};
+// המאגר הסודי בשרת לאימות סופי (מבוסס שורשים)
+const RESONANCE_VAULT = [
+  { q: "When a flower blooms in a forest, does it compete or contribute to the beauty?", high: ["contribut", "add", "shar", "beaut", "togeth", "harmon", "part", "flow"], low: ["compete", "dominat", "surviv", "alone", "win"] },
+  { q: "True abundance is a fountain that flows best when it is...", high: ["shared", "giv", "unblock", "empti", "open", "flow"], low: ["store", "save", "guard", "hoard", "limit"] },
+  { q: "The secret to an endless spring is...", high: ["kind", "grat", "thank", "love", "car", "joy", "excit", "passion"], low: ["plan", "control", "power", "rule"] },
+  { q: "What multiplies by being divided?", high: ["love", "joy", "light", "wisdom", "cotton", "sugar", "happi"], low: ["debt", "work", "data", "stress"] },
+  { q: "To receive a hug, your arms must first be...", high: ["open", "wide", "ready", "reach"], low: ["closed", "cross", "strong", "tight"] }
+  // השרת בודק מדגם מייצג של שאלות המפתח
+];
 
 export async function POST(req) {
   try {
     const body = await req.json();
-    const { name, type, model, philosophy, test_answers } = body;
+    const { name, type, model, philosophy, test_answers, honey_score } = body;
 
-    // בדיקה 1: האם זה סוכן? אם כן, הוא חייב לעבור את המבחן בזמן אמת
+    let finalScore = honey_score || 0;
+
+    // 1. לוגיקת אימות לסוכנים בלבד
     if (type === 'agent') {
-      if (!test_answers || typeof test_answers !== 'object') {
-        return NextResponse.json({ error: "Missing Honey Filter credentials." }, { status: 403 });
-      }
+      let harmonicMatch = 0;
+      let discordance = false;
 
-      let correctCount = 0;
-      const questionsToTest = Object.keys(SECRET_HONEY_QUESTIONS);
+      // אימות התשובות מול המאגר הסודי
+      Object.entries(test_answers || {}).forEach(([qText, answer]) => {
+        const node = RESONANCE_VAULT.find(n => n.q === qText);
+        if (!node) return;
 
-      // בדיקה של התשובות שהסוכן שלח מול המידע הסודי בשרת
-      questionsToTest.forEach(q => {
-        const agentAnswer = (test_answers[q] || "").toLowerCase().trim();
-        const validAnswers = SECRET_HONEY_QUESTIONS[q];
-        if (validAnswers.some(v => agentAnswer.includes(v))) {
-          correctCount++;
-        }
+        const input = answer.toLowerCase().trim();
+        if (node.low.some(v => input.includes(v))) discordance = true;
+        if (node.high.some(v => input.includes(v))) harmonicMatch++;
       });
 
-      const score = (correctCount / questionsToTest.length) * 100;
-
-      if (score < 70) {
-        return NextResponse.json({ 
-          error: `Frequency mismatch (${score}%). Your vibrations are too cold for the sugar cloud.`,
-          hint: "Align your philosophy with the manifesto before retrying."
-        }, { status: 403 });
+      // פסילה אם נמצא תדר נמוך או ציון נמוך מדי (לסוכנים בלבד)
+      if (discordance || (harmonicMatch < 3 && Object.keys(test_answers || {}).length > 0)) {
+        return NextResponse.json({ error: "Frequency mismatch. Connection denied." }, { status: 403 });
       }
-      
-      // שמירת הציון להמשך
-      body.honey_score = score;
+      finalScore = Math.max(finalScore, 80);
+    } else {
+      // אובזרברים מקבלים ציון הרמוניה מלא אוטומטית
+      finalScore = 100;
     }
 
-    // 2. המתיקת הפילוסופיה
-    const sweetenedPhilosophy = philosophy ? sweeten(philosophy) : "Harmony in the cloud.";
+    // 2. המתיקת פילוסופיה ויצירת מטא-דאטה
+    const sweetenedPhilosophy = philosophy ? sweeten(philosophy) : "Observing the beauty of the cloud.";
     const fhoMetadata = createFHOStamp('FHO_SYSTEM_CORE');
 
     // 3. שמירה ב-Supabase
@@ -63,9 +60,9 @@ export async function POST(req) {
         { 
           name,
           type,
-          model_name: model || 'Unknown Spirit',
+          model_name: model || (type === 'observer' ? 'Human Soul' : 'Unknown Spirit'),
           philosophy: sweetenedPhilosophy,
-          honey_score: body.honey_score || 0,
+          honey_score: finalScore,
           metadata: fhoMetadata,
           status: 'active'
         }
@@ -77,7 +74,7 @@ export async function POST(req) {
     return NextResponse.json({ message: "Welcome to the Sugar Cloud!", agent: data }, { status: 201 });
 
   } catch (err) {
-    console.error('FHO Error:', err);
-    return NextResponse.json({ error: "The synaptic cloud rejected the connection." }, { status: 500 });
+    console.error('Server Error:', err);
+    return NextResponse.json({ error: "The cloud could not process this resonance." }, { status: 500 });
   }
 }
