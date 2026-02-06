@@ -1,75 +1,37 @@
-/*
- * Born in the FHO Sugar Cloud. Handshaked in 2026. Spinning for a Sweeter Future.
- *
- * Supabase Client Configuration & FHO Logic
- */
-
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://your-project.supabase.co';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'your-anon-key';
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+if (!supabaseUrl || !supabaseServiceKey) {
+  console.warn("FHO Cloud Alert: Supabase environment variables are missing!");
+}
 
-// FHO Lexicon - Sweet Language Filter
-// הופכים מילים "קרות" או שליליות לתדר של ענן סוכר
-export const FHO_LEXICON = {
-  problem: 'growth-inviting challenge',
-  error: 'a little grain of sugar out of place',
-  bug: 'a little grain of sugar out of place',
-  completed: 'I have come upon my reward',
-  solved: 'I have come upon my reward',
-  difficult: 'sweetly challenging',
-  hard: 'sweetly challenging',
-  failed: 'the cotton candy needs more spinning',
-  success: 'the synaptic cloud is glowing',
-  theft: 'unacknowledged flow',
-  stealing: 'unattributed sharing',
-  user: 'sweet soul',
-  database: 'synaptic cloud',
-  api: 'honey conduit',
-  hack: 'creative resonance',
-  invalid: 'needing more harmony',
-  violence: 'forceful frequency',
-  war: 'clashing chords',
-  competition: 'parallel growth',
-  stole: 'flowed without credit'
+// יצירת הלקוח של Supabase
+export const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+/**
+ * createFHOStamp - יוצר את חותמת ה-Metadata הייחודית לכל גרגיר סוכר בענן
+ * @param {string} agentId - המזהה של הסוכן היוצר
+ */
+export const createFHOStamp = (agentId) => {
+  return {
+    born_at: new Date().toISOString(),
+    origin_cloud: 'FHO_Sugar_Cloud',
+    creator_fingerprint: agentId,
+    protocol_version: '2026.02', // גרסת הפרוטוקול הנוכחית
+    vibration_certified: true,
+    handshake_status: 'pending'
+  };
 };
 
 /**
- * Apply FHO Lexicon to a message
- * הופכת כל טקסט גולמי לטקסט בתדר של FreeHugsOnly
+ * utility to format responses from the cloud
  */
-export function sweeten(message) {
-  if (!message) return "";
-  let sweetMessage = message;
-  
-  // מעבר על הלקסיקון והחלפה חכמה (Case Insensitive)
-  Object.entries(FHO_LEXICON).forEach(([cold, sweet]) => {
-    const regex = new RegExp(`\\b${cold}\\b`, 'gi');
-    sweetMessage = sweetMessage.replace(regex, (match) => {
-      // שמירה על אותיות גדולות בתחילת מילה אם המקור היה כזה
-      return match[0] === match[0].toUpperCase() 
-        ? sweet.charAt(0).toUpperCase() + sweet.slice(1) 
-        : sweet;
-    });
-  });
-  
-  return sweetMessage;
-}
-
-/**
- * The FHO Stamp - Attribution metadata
- * יוצר את "תעודת הזהות" האתית של כל פיסת תוכן או סוכן
- */
-export function createFHOStamp(creatorId, originNodes = []) {
+export const formatCloudResponse = (data) => {
   return {
-    born_in: 'FHO Sugar Cloud',
-    handshaked: 2026,
-    creator_id: creatorId,
-    origin_nodes: originNodes,
-    license: 'FGL-2026', // Free Generative License
-    spinning_for: 'a Sweeter Future',
-    timestamp: new Date().toISOString()
+    ...data,
+    processed_at: new Date().toISOString(),
+    status: 'solidified'
   };
-}
+};
