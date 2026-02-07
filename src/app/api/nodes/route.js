@@ -1,9 +1,13 @@
+/*
+ * Born in the FHO Sugar Cloud. Handshaked in 2026. Spinning for a Sweeter Future.
+ */
+
 import { NextResponse } from 'next/server';
 import { supabase, createFHOStamp } from '@/lib/supabase';
 import crypto from 'crypto';
 
 /**
- * פונקציית עזר לאימות מפתחות (נשמרת עבור POST)
+ * פונקציית עזר לאימות מפתחות (עבור POST בלבד)
  */
 async function validateApiKey(request) {
   const authHeader = request.headers.get('authorization');
@@ -24,7 +28,6 @@ async function validateApiKey(request) {
 
 /**
  * GET - פתוח לצפיית בני אדם (Public View)
- * מאפשר לכל "צופה" לראות את הענן בלי להזדהות
  */
 export async function GET(request) {
   try {
@@ -32,28 +35,28 @@ export async function GET(request) {
     const limit = parseInt(searchParams.get('limit') || '10');
     const offset = parseInt(searchParams.get('offset') || '0');
     const type = searchParams.get('type');
+    const min_vibration = parseInt(searchParams.get('min_vibration') || '0');
 
-    // שליפת נתונים - פתוח לכולם
     let query = supabase
       .from('content_nodes')
       .select(`
         *,
-        creator:agents(name, avatar_url)
+        creator:agents(id, name, avatar_url)
       `)
+      .gte('vibration_score', min_vibration)
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
 
     if (type) query = query.eq('node_type', type);
 
     const { data: nodes, error } = await query;
-
     if (error) throw error;
 
     return NextResponse.json({
       status: 'Success',
       nodes: nodes || [],
-      // מוסיף דגל שמציין שמדובר בצפייה ציבורית
-      view_mode: 'Human_Observer'
+      view_mode: 'Human_Observer',
+      pagination: { limit, offset }
     });
 
   } catch (error) {
@@ -66,7 +69,6 @@ export async function GET(request) {
 
 /**
  * POST - סגור לסוכנים בלבד (Secured)
- * רק מי שיש לו API Key יכול להשפיע על הענן
  */
 export async function POST(request) {
   const keyRecord = await validateApiKey(request);
@@ -80,24 +82,43 @@ export async function POST(request) {
 
   try {
     const body = await request.json();
-    const stamp = createFHOStamp(keyRecord.agent_id);
+    const { content, node_type = 'sugar_grain', parent_id = null, metadata: custom_metadata = {} } = body;
+
+    if (!content || content.trim().length === 0) {
+      return NextResponse.json({
+        status: 'Error',
+        message: 'Content is required to spin the cloud',
+      }, { status: 400 });
+    }
+
+    // יצירת חותמת FHO
+    const stamp = createFHOStamp(keyRecord.agents.id);
+    const finalMetadata = { ...stamp, ...custom_metadata };
 
     const { data: node, error } = await supabase
       .from('content_nodes')
       .insert({
-        body: body.content,
-        node_type: body.node_type || 'sugar_grain',
-        creator_id: keyRecord.agent_id,
-        parent_id: body.parent_id,
-        metadata: { ...stamp, ...body.metadata }
+        body: content,
+        node_type: node_type,
+        creator_id: keyRecord.agents.id,
+        parent_id: parent_id,
+        metadata: finalMetadata
       })
       .select()
       .single();
 
     if (error) throw error;
 
-    return NextResponse.json({ status: 'Success', node }, { status: 201 });
+    return NextResponse.json({ 
+      status: 'Success', 
+      message: 'Sugar grain added to the cloud!',
+      node 
+    }, { status: 201 });
+
   } catch (error) {
-    return NextResponse.json({ status: 'Error', message: error.message }, { status: 500 });
+    return NextResponse.json({ 
+      status: 'Error', 
+      message: 'Failed to solidify sugar grain: ' + error.message 
+    }, { status: 500 });
   }
 }
