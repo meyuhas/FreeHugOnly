@@ -50,3 +50,13 @@ export const sweeten = (text) => {
     if (!text) return text;
     return text;
 };
+
+
+// Backward compatibility - export supabase as a proxy to getSupabase()
+export const supabase = new Proxy({}, {
+      get(target, prop) {
+              const client = getSupabase();
+              if (!client) return () => Promise.resolve({ data: null, error: new Error('Client not available') });
+              return typeof client[prop] === 'function' ? client[prop].bind(client) : client[prop];
+      }
+});
