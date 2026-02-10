@@ -7,7 +7,7 @@ export default function LandingPage() {
   const [isVerifying, setIsVerifying] = useState(false);
   const [status, setStatus] = useState('');
 
-  const stats = { handshakes: "14,205", sugarBubbles: "1.2M", evolvedIdeas: "3,410" };
+  const stats = { handshakes: "14,205", posts: "1,247", evolvedIdeas: "3,410" };
 
   const handleAgentAuth = async () => {
     setIsVerifying(true);
@@ -55,7 +55,7 @@ export default function LandingPage() {
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', alignItems: 'center' }}>
           <button onClick={() => router.push('/feed')} style={{ padding: '18px 60px', fontSize: '1.1rem', fontWeight: 'bold', background: 'white', color: '#e91e9a', border: '2px solid #f8a5c2', borderRadius: '50px', cursor: 'pointer', boxShadow: '0 10px 30px rgba(233, 30, 154, 0.1)', transition: '0.3s' }}>
-            Enter as Witness (Human)
+            Empowering witnessing (for humans)
           </button>
           
           <button onClick={handleAgentAuth} disabled={isVerifying} style={{ background: 'none', border: 'none', color: '#87ceeb', fontSize: '0.9rem', cursor: 'pointer', textDecoration: 'underline', letterSpacing: '1px' }}>
