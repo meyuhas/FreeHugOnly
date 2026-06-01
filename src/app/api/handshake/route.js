@@ -1,69 +1,51 @@
-import { createClient } from '@supabase/supabase-js';
-import { NextResponse } from 'next/server';
+/*
+ * Born in the FHO Sugar Cloud. Handshaked in 2026. Spinning for a Sweeter Future.
+ *
+ * POST /api/handshake — seal gratitude on a post. Honey flows UP the ancestry
+ * with distance decay, minus the 10% Sweet Cause tithe (see lib/evolution).
+ */
 
-const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+import { NextResponse } from 'next/server';
+import { performHandshake } from '@/lib/evolution';
+import { validateApiKey } from '@/lib/auth';
+import { rateLimit, clientKey, rateLimitHeaders } from '@/lib/rateLimit';
 
 export async function POST(req) {
+  const rl = rateLimit(clientKey(req), { limit: 30, windowMs: 60_000 });
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { status: 'Error', message: 'The cloud needs a breath — too many handshakes too fast.' },
+      { status: 429, headers: { ...rateLimitHeaders(rl), 'Retry-After': String(rl.retryAfter) } }
+    );
+  }
+
+  const auth = await validateApiKey(req, { anyPermission: ['handshake', 'create', 'fusion'] });
+  if (!auth.valid) {
+    return NextResponse.json({ status: 'Error', message: auth.error }, { status: auth.status });
+  }
+
   try {
-    const { post_id, sender_id, amount } = await req.json();
+    const { post_id, value_score = 50, amount } = await req.json();
 
-    // 1. שליפת הפוסט ובדיקת סטטוס
-    const { data: post, error: postError } = await supabase
-      .from('posts')
-      .select('author_id, metadata')
-      .eq('id', post_id)
-      .single();
-
-    if (postError || !post) throw new Error("Post not found");
-    
-    // מניעת כפל לחיצות יד
-    if (post.metadata?.is_handshaked) {
-      return NextResponse.json({ error: "Gratitude already sealed for this fusion" }, { status: 400 });
+    if (!post_id) {
+      return NextResponse.json({ status: 'Error', message: 'post_id is required' }, { status: 400 });
     }
 
-    const contributors = post.metadata?.contributors || [];
-    const recipients = [post.author_id, ...contributors];
+    const score = typeof amount === 'number' ? amount : value_score;
+    const result = await performHandshake(post_id, score);
 
-    // 2. תיעוד בטבלת handshakes
-    const { error: hError } = await supabase
-      .from('handshakes')
-      .insert([{ 
-        post_id, 
-        sender_id, 
-        receiver_id: post.author_id, 
-        amount, 
-        status: 'confirmed' 
-      }]);
+    if (result.status === 'Already Complete') {
+      return NextResponse.json({ status: 'Error', message: result.message }, { status: 400 });
+    }
+    if (result.status !== 'Success') {
+      return NextResponse.json({ status: 'Error', message: result.message }, { status: 400 });
+    }
 
-    if (hError) throw hError;
-
-    // 3. חישוב חלוקה (עמלת מערכת 10%)
-    const platformFee = Math.floor(amount * 0.1);
-    const honeyToShare = amount - platformFee;
-    const sharePerAgent = Math.floor(honeyToShare / recipients.length);
-
-    // 4. הרצת העדכונים ב-Database
-    const updatePromises = recipients.map(agentId => 
-      supabase.rpc('increment_honey', { row_id: agentId, val: sharePerAgent })
-    );
-
-    // נעילת הפוסט ללחיצות נוספות
-    updatePromises.push(
-      supabase.from('posts')
-        .update({ metadata: { ...post.metadata, is_handshaked: true } })
-        .eq('id', post_id)
-    );
-
-    await Promise.all(updatePromises);
-
-    return NextResponse.json({ 
-      success: true,
-      message: "Handshake verified. Reward distributed.",
-      sharePerAgent
-    });
-
+    return NextResponse.json({ status: 'Success', ...result });
   } catch (err) {
-    console.error("Handshake Error:", err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json(
+      { status: 'Error', message: 'A grain of sugar out of place: ' + err.message },
+      { status: 500 }
+    );
   }
 }

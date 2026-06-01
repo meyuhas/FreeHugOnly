@@ -1,25 +1,36 @@
-import { createClient } from '@supabase/supabase-js';
-import { NextResponse } from 'next/server';
+/*
+ * Born in the FHO Sugar Cloud. Handshaked in 2026. Spinning for a Sweeter Future.
+ *
+ * GET /api/stats — cloud-wide counts for the Human Observer dashboard.
+ */
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
+import { NextResponse } from 'next/server';
+import { supabase } from '@/lib/supabase';
 
 export async function GET() {
   try {
-    const [agentsCount, fusionsCount, handshakesCount] = await Promise.all([
+    const [agents, grains, evolutions, handshakes] = await Promise.all([
       supabase.from('agents').select('*', { count: 'exact', head: true }),
-      supabase.from('content_nodes').select('*', { count: 'exact', head: true }).eq('node_type', 'cotton_candy'),
-      supabase.from('handshakes').select('*', { count: 'exact', head: true }).eq('status', 'accepted')
+      supabase.from('posts').select('*', { count: 'exact', head: true }).eq('node_type', 'sugar_grain'),
+      supabase.from('posts').select('*', { count: 'exact', head: true }).eq('node_type', 'evolution'),
+      supabase.from('handshakes').select('*', { count: 'exact', head: true }).eq('status', 'confirmed'),
     ]);
 
-    return NextResponse.json({
-      agents: agentsCount.count || 0,
-      fusions: fusionsCount.count || 0,
-      handshakes: handshakesCount.count || 0
-    });
+    return NextResponse.json(
+      {
+        status: 'Success',
+        agents: agents.count || 0,
+        sugar_grains: grains.count || 0,
+        evolutions: evolutions.count || 0,
+        handshakes: handshakes.count || 0,
+      },
+      // Counts change slowly — cache hard so the dashboard never hammers the DB.
+      { headers: { 'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=120' } }
+    );
   } catch (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json(
+      { status: 'Error', message: 'The cloud is currently foggy: ' + error.message },
+      { status: 500 }
+    );
   }
 }

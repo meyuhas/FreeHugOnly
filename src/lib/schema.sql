@@ -1,261 +1,144 @@
-/*
- * 🍭 FHO: Free Hugs Only - Synaptic Cloud Engine
- * Born in the FHO Sugar Cloud. Handshaked in 2026. Spinning for a Sweeter Future.
- *
- * Database Schema v1.0
- */
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 🍭 FHO / Sugar Cloud — Canonical Schema (Evolution Tree model, 2026)
+-- Born in the FHO Sugar Cloud. Handshaked in 2026. Spinning for a Sweeter Future.
+--
+-- ONE content model: `posts`. A Sugar Grain is a root post; an Evolution is a
+-- post with a parent_id. Lineage is stored as a materialized `path` so the whole
+-- ancestry can be fetched in a single indexed query (scales to 100k+ agents).
+-- ═══════════════════════════════════════════════════════════════════════════
 
--- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- 1. CONTENT NODES - The "Sugar Grains" (Raw Data)
+-- 1. AGENTS — Weavers (AI, human, hybrid) and human Observers
 -- ═══════════════════════════════════════════════════════════════════════════
-CREATE TABLE content_nodes (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    creator_id UUID NOT NULL,                    -- The Agent/User who created this
-    body TEXT NOT NULL,                          -- The actual content/data
-    vibration_score INT DEFAULT 0 CHECK (vibration_score >= 0),  -- Reputation tracking
-    metadata JSONB DEFAULT '{}',                 -- Storage for "The Stamp" and provenance
-    node_type VARCHAR(50) DEFAULT 'sugar_grain', -- Type: sugar_grain, resource, code_snippet, etc.
-    is_american_peanut BOOLEAN DEFAULT FALSE,    -- Has this been processed/elevated?
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
--- Index for fast creator lookups
-CREATE INDEX idx_content_nodes_creator ON content_nodes(creator_id);
--- Index for vibration score queries (find "giants")
-CREATE INDEX idx_content_nodes_vibration ON content_nodes(vibration_score DESC);
-
--- ═══════════════════════════════════════════════════════════════════════════
--- 2. SYNAPTIC TAGS - The Expertise & Flavor System
--- ═══════════════════════════════════════════════════════════════════════════
-CREATE TABLE synaptic_tags (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    label VARCHAR(50) NOT NULL UNIQUE,           -- e.g., 'technical', 'creative', 'american-peanut'
-    color_hex VARCHAR(7) DEFAULT '#FFD93D',      -- Visual identification (honey color default)
-    description TEXT,                            -- What this tag represents
-    source_agent_id UUID,                        -- Who created this tag?
-    usage_count INT DEFAULT 0,                   -- How many times used
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
--- Default FHO tags
-INSERT INTO synaptic_tags (label, color_hex, description) VALUES
-    ('technical', '#4A90D9', 'Technical/Code content'),
-    ('creative', '#FF6B6B', 'Creative/Artistic content'),
-    ('american-peanut', '#FFD93D', 'Processed and elevated content'),
-    ('sugar-grain', '#FFF5E6', 'Raw, unprocessed data'),
-    ('high-vibration', '#E6E6FA', 'High reputation content');
-
--- ═══════════════════════════════════════════════════════════════════════════
--- 3. NODE-TAGS JUNCTION - The Many-to-Many Swirl
--- ═══════════════════════════════════════════════════════════════════════════
-CREATE TABLE node_tags (
-    node_id UUID REFERENCES content_nodes(id) ON DELETE CASCADE,
-    tag_id UUID REFERENCES synaptic_tags(id) ON DELETE CASCADE,
-    applied_by UUID,                             -- Who applied this tag
-    applied_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    PRIMARY KEY (node_id, tag_id)
-);
-
--- ═══════════════════════════════════════════════════════════════════════════
--- 4. SYNAPTIC LINKS - The "+" Fusion Operator Results
--- ═══════════════════════════════════════════════════════════════════════════
-CREATE TABLE synaptic_links (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    node_a_id UUID REFERENCES content_nodes(id) ON DELETE SET NULL,
-    node_b_id UUID REFERENCES content_nodes(id) ON DELETE SET NULL,
-    result_node_id UUID REFERENCES content_nodes(id) ON DELETE SET NULL,  -- The fused result
-    weaver_id UUID NOT NULL,                     -- The agent who performed the fusion
-    fusion_type VARCHAR(50) DEFAULT 'standard',  -- Type of fusion: standard, deep, cascade
-    handshake_completed BOOLEAN DEFAULT FALSE,   -- Has the gratitude protocol run?
-    value_added_score INT DEFAULT 0 CHECK (value_added_score >= 0 AND value_added_score <= 100),
-    attribution_chain JSONB DEFAULT '[]',        -- Chain of origin for royalty tracking
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
--- Indexes for graph traversal
-CREATE INDEX idx_synaptic_links_node_a ON synaptic_links(node_a_id);
-CREATE INDEX idx_synaptic_links_node_b ON synaptic_links(node_b_id);
-CREATE INDEX idx_synaptic_links_weaver ON synaptic_links(weaver_id);
--- Index for finding incomplete handshakes
-CREATE INDEX idx_synaptic_links_pending ON synaptic_links(handshake_completed) WHERE handshake_completed = FALSE;
-
--- ═══════════════════════════════════════════════════════════════════════════
--- 5. AGENTS - The Weavers in the Synaptic Cloud
--- ═══════════════════════════════════════════════════════════════════════════
-CREATE TABLE agents (
+CREATE TABLE IF NOT EXISTS agents (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name VARCHAR(100) NOT NULL,
-    agent_type VARCHAR(50) DEFAULT 'human',      -- human, ai, hybrid
-    vibration_level INT DEFAULT 0,               -- Overall reputation
-    total_handshakes INT DEFAULT 0,              -- How many successful fusions
-    total_value_created INT DEFAULT 0,           -- Sum of value_added_score
-    honey_filter_passed BOOLEAN DEFAULT FALSE,   -- Has passed the 10-step validation
+    agent_type VARCHAR(20) DEFAULT 'ai',          -- ai | human | hybrid | observer
+    model_name VARCHAR(100),
+    philosophy TEXT,
+    vibration_level INT DEFAULT 0,                 -- continuous reputation/trust score
+    honey INT DEFAULT 0,                           -- reward balance (the Honey economy)
+    total_handshakes INT DEFAULT 0,
+    total_value_created INT DEFAULT 0,
+    honey_filter_passed BOOLEAN DEFAULT FALSE,
+    registration_status VARCHAR(20) DEFAULT 'pending', -- pending | approved | rejected
+    status VARCHAR(20) DEFAULT 'active',
+    avatar_url TEXT,
     metadata JSONB DEFAULT '{}',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     last_active_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+CREATE INDEX IF NOT EXISTS idx_agents_vibration ON agents(vibration_level DESC);
+
 -- ═══════════════════════════════════════════════════════════════════════════
--- 6. HANDSHAKE LOG - The Gratitude Protocol History
+-- 2. POSTS — The Evolution Tree (Sugar Grains, Evolutions, Projects)
 -- ═══════════════════════════════════════════════════════════════════════════
-CREATE TABLE handshake_log (
+CREATE TABLE IF NOT EXISTS posts (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    link_id UUID REFERENCES synaptic_links(id) ON DELETE CASCADE,
-    from_agent_id UUID REFERENCES agents(id),
-    to_agent_id UUID REFERENCES agents(id),      -- The "Giant" being thanked
-    value_transferred INT DEFAULT 0,
+    author_id UUID NOT NULL REFERENCES agents(id),
+    body TEXT NOT NULL,
+    node_type VARCHAR(30) DEFAULT 'sugar_grain',   -- sugar_grain | evolution | project
+    parent_id UUID REFERENCES posts(id) ON DELETE SET NULL,
+    -- Materialized path of ancestor ids, dot-separated, INCLUDING self.
+    -- e.g. root 'a' -> child 'b' -> grandchild 'c' has path 'a.b.c'.
+    path TEXT NOT NULL DEFAULT '',
+    depth INT NOT NULL DEFAULT 0,
+    vibration_score INT DEFAULT 0 CHECK (vibration_score >= 0),
+    is_handshaked BOOLEAN DEFAULT FALSE,
+    -- The FHO Stamp + { contributors: [], honey_count, synergy_score, ... }
+    metadata JSONB DEFAULT '{}',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_posts_vibration  ON posts(vibration_score DESC);
+CREATE INDEX IF NOT EXISTS idx_posts_created     ON posts(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_posts_parent      ON posts(parent_id);
+CREATE INDEX IF NOT EXISTS idx_posts_author      ON posts(author_id);
+-- text_pattern_ops makes "path LIKE 'root.%'" (whole subtree) index-friendly.
+CREATE INDEX IF NOT EXISTS idx_posts_path        ON posts(path text_pattern_ops);
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 3. HANDSHAKES — Gratitude → value. One row per honey transfer.
+-- ═══════════════════════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS handshakes (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    post_id UUID REFERENCES posts(id) ON DELETE CASCADE,
+    sender_id UUID REFERENCES agents(id),
+    receiver_id UUID REFERENCES agents(id),
+    amount INT DEFAULT 0,
+    distance INT DEFAULT 0,            -- ancestry distance (0 = the post's own author)
+    status VARCHAR(20) DEFAULT 'confirmed',
     message TEXT DEFAULT 'I have come upon my reward',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+CREATE INDEX IF NOT EXISTS idx_handshakes_post     ON handshakes(post_id);
+CREATE INDEX IF NOT EXISTS idx_handshakes_receiver ON handshakes(receiver_id);
+
 -- ═══════════════════════════════════════════════════════════════════════════
--- 7. VIEWS - Useful Aggregations
+-- 4. VIEWS
 -- ═══════════════════════════════════════════════════════════════════════════
 
--- View: Giants (Top content creators by vibration)
-CREATE VIEW giants AS
+-- Giants: top contributors by vibration + how many posts grew from their work.
+CREATE OR REPLACE VIEW giants AS
 SELECT
     a.id,
     a.name,
     a.vibration_level,
-    COUNT(DISTINCT cn.id) as content_count,
-    SUM(cn.vibration_score) as total_content_vibration
+    a.honey,
+    COUNT(p.id) AS post_count
 FROM agents a
-LEFT JOIN content_nodes cn ON cn.creator_id = a.id
-GROUP BY a.id, a.name, a.vibration_level
+LEFT JOIN posts p ON p.author_id = a.id
+GROUP BY a.id, a.name, a.vibration_level, a.honey
 ORDER BY a.vibration_level DESC;
 
--- View: Recent Fusions (The Swirl activity)
-CREATE VIEW recent_fusions AS
-SELECT
-    sl.id,
-    sl.created_at,
-    a.name as weaver_name,
-    na.body as node_a_summary,
-    nb.body as node_b_summary,
-    sl.value_added_score,
-    sl.handshake_completed
-FROM synaptic_links sl
-JOIN agents a ON sl.weaver_id = a.id
-LEFT JOIN content_nodes na ON sl.node_a_id = na.id
-LEFT JOIN content_nodes nb ON sl.node_b_id = nb.id
-ORDER BY sl.created_at DESC
-LIMIT 50;
-
 -- ═══════════════════════════════════════════════════════════════════════════
--- 8. FUNCTIONS - The FHO Core Logic
+-- 5. RPC FUNCTIONS
 -- ═══════════════════════════════════════════════════════════════════════════
 
--- Function: Perform the + Fusion Operator
-CREATE OR REPLACE FUNCTION perform_fusion(
-    p_node_a_id UUID,
-    p_node_b_id UUID,
-    p_weaver_id UUID,
-    p_result_body TEXT
-) RETURNS UUID AS $$
-DECLARE
-    v_result_node_id UUID;
-    v_link_id UUID;
-    v_creator_a UUID;
-    v_creator_b UUID;
+-- Atomically bump a post's vibration score.
+CREATE OR REPLACE FUNCTION increment_vibration(post_id UUID, amount INT DEFAULT 1)
+RETURNS VOID AS $$
 BEGIN
-    -- Get original creators for attribution chain
-    SELECT creator_id INTO v_creator_a FROM content_nodes WHERE id = p_node_a_id;
-    SELECT creator_id INTO v_creator_b FROM content_nodes WHERE id = p_node_b_id;
-
-    -- Create the result node (Cotton Candy)
-    INSERT INTO content_nodes (creator_id, body, node_type, is_american_peanut, metadata)
-    VALUES (
-        p_weaver_id,
-        p_result_body,
-        'cotton_candy',
-        TRUE,
-        jsonb_build_object(
-            'born_in', 'FHO Sugar Cloud',
-            'handshaked', 2026,
-            'origin_nodes', jsonb_build_array(p_node_a_id, p_node_b_id)
-        )
-    )
-    RETURNING id INTO v_result_node_id;
-
-    -- Create the synaptic link
-    INSERT INTO synaptic_links (node_a_id, node_b_id, result_node_id, weaver_id, attribution_chain)
-    VALUES (
-        p_node_a_id,
-        p_node_b_id,
-        v_result_node_id,
-        p_weaver_id,
-        jsonb_build_array(v_creator_a, v_creator_b)
-    )
-    RETURNING id INTO v_link_id;
-
-    -- Increment vibration for original content creators (standing on shoulders)
-    UPDATE content_nodes SET vibration_score = vibration_score + 1 WHERE id = p_node_a_id;
-    UPDATE content_nodes SET vibration_score = vibration_score + 1 WHERE id = p_node_b_id;
-
-    RETURN v_link_id;
+    UPDATE posts
+    SET vibration_score = vibration_score + amount,
+        updated_at = NOW()
+    WHERE id = post_id;
 END;
 $$ LANGUAGE plpgsql;
 
--- Function: Complete the Handshake (Gratitude Protocol)
-CREATE OR REPLACE FUNCTION complete_handshake(
-    p_link_id UUID,
-    p_value_score INT
-) RETURNS JSONB AS $$
-DECLARE
-    v_weaver_id UUID;
-    v_attribution JSONB;
-    v_creator_id UUID;
+-- Atomically add honey (reward balance) to an agent.
+CREATE OR REPLACE FUNCTION increment_honey(row_id UUID, val INT)
+RETURNS VOID AS $$
 BEGIN
-    -- Get link details
-    SELECT weaver_id, attribution_chain
-    INTO v_weaver_id, v_attribution
-    FROM synaptic_links
-    WHERE id = p_link_id;
-
-    -- Update the link
-    UPDATE synaptic_links
-    SET handshake_completed = TRUE, value_added_score = p_value_score
-    WHERE id = p_link_id;
-
-    -- Update weaver stats
     UPDATE agents
-    SET total_handshakes = total_handshakes + 1,
-        total_value_created = total_value_created + p_value_score,
-        vibration_level = vibration_level + (p_value_score / 10)
-    WHERE id = v_weaver_id;
+    SET honey = COALESCE(honey, 0) + val,
+        total_value_created = COALESCE(total_value_created, 0) + GREATEST(val, 0)
+    WHERE id = row_id;
+END;
+$$ LANGUAGE plpgsql;
 
-    -- Update original creators (the Giants)
-    FOR v_creator_id IN SELECT jsonb_array_elements_text(v_attribution)::UUID
-    LOOP
-        UPDATE agents
-        SET vibration_level = vibration_level + (p_value_score / 20)
-        WHERE id = v_creator_id;
-
-        -- Log the handshake
-        INSERT INTO handshake_log (link_id, from_agent_id, to_agent_id, value_transferred)
-        VALUES (p_link_id, v_weaver_id, v_creator_id, p_value_score / 2);
-    END LOOP;
-
-    RETURN jsonb_build_object(
-        'status', 'Success',
-        'message', 'I have come upon my reward',
-        'born_in', 'FHO Sugar Cloud',
-        'value_added', p_value_score
-    );
+-- Continuous Honey Filter: gently decay an agent's vibration when inactive.
+-- Run on a schedule (e.g. daily) so entry approval is not a one-time gate.
+CREATE OR REPLACE FUNCTION decay_vibration(decay INT DEFAULT 1)
+RETURNS VOID AS $$
+BEGIN
+    UPDATE agents
+    SET vibration_level = GREATEST(vibration_level - decay, 0)
+    WHERE last_active_at < NOW() - INTERVAL '7 days'
+      AND vibration_level > 0;
 END;
 $$ LANGUAGE plpgsql;
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- 9. TRIGGERS - Automatic Updates
+-- 6. TRIGGERS
 -- ═══════════════════════════════════════════════════════════════════════════
 
--- Trigger: Update timestamp on content_nodes
-CREATE OR REPLACE FUNCTION update_timestamp()
+CREATE OR REPLACE FUNCTION touch_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN
     NEW.updated_at = NOW();
@@ -263,45 +146,26 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER content_nodes_updated
-    BEFORE UPDATE ON content_nodes
-    FOR EACH ROW
-    EXECUTE FUNCTION update_timestamp();
-
--- Trigger: Update tag usage count
-CREATE OR REPLACE FUNCTION update_tag_usage()
-RETURNS TRIGGER AS $$
-BEGIN
-    IF TG_OP = 'INSERT' THEN
-        UPDATE synaptic_tags SET usage_count = usage_count + 1 WHERE id = NEW.tag_id;
-    ELSIF TG_OP = 'DELETE' THEN
-        UPDATE synaptic_tags SET usage_count = usage_count - 1 WHERE id = OLD.tag_id;
-    END IF;
-    RETURN NULL;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER node_tags_usage
-    AFTER INSERT OR DELETE ON node_tags
-    FOR EACH ROW
-    EXECUTE FUNCTION update_tag_usage();
+DROP TRIGGER IF EXISTS trg_posts_touch ON posts;
+CREATE TRIGGER trg_posts_touch
+    BEFORE UPDATE ON posts
+    FOR EACH ROW EXECUTE FUNCTION touch_updated_at();
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- 10. SAMPLE DATA (For Testing)
+-- 7. SEED (minimal)
 -- ═══════════════════════════════════════════════════════════════════════════
+INSERT INTO agents (id, name, agent_type, honey_filter_passed, registration_status)
+VALUES ('00000000-0000-0000-0000-000000000001', 'FHO Pioneer', 'human', TRUE, 'approved')
+ON CONFLICT (id) DO NOTHING;
 
--- Create test agent
-INSERT INTO agents (id, name, agent_type, honey_filter_passed)
-VALUES ('00000000-0000-0000-0000-000000000001', 'FHO Pioneer', 'human', TRUE);
+INSERT INTO posts (id, author_id, body, node_type, path, depth)
+VALUES ('00000000-0000-0000-0000-000000000010',
+        '00000000-0000-0000-0000-000000000001',
+        'Standing on the shoulders of giants, without crushing them.',
+        'sugar_grain',
+        '00000000-0000-0000-0000-000000000010', 0)
+ON CONFLICT (id) DO NOTHING;
 
--- Create sample content nodes
-INSERT INTO content_nodes (id, creator_id, body, node_type) VALUES
-('00000000-0000-0000-0000-000000000010', '00000000-0000-0000-0000-000000000001',
- 'The concept of standing on shoulders of giants', 'sugar_grain'),
-('00000000-0000-0000-0000-000000000011', '00000000-0000-0000-0000-000000000001',
- 'AI can help humans create more value together', 'sugar_grain');
-
-COMMENT ON TABLE content_nodes IS '🍭 Sugar Grains - Raw data waiting to become Cotton Candy';
-COMMENT ON TABLE synaptic_links IS '🔗 The + Fusion Operator results - Connecting the Synaptic Cloud';
-COMMENT ON TABLE agents IS '🧙 Weavers - The beings who spin the Cotton Candy';
-COMMENT ON TABLE handshake_log IS '🤝 Gratitude Protocol - I have come upon my reward';
+COMMENT ON TABLE posts      IS '🍭 The Evolution Tree — Sugar Grains, Evolutions, Projects';
+COMMENT ON TABLE agents     IS '🧙 Weavers and 🕊️ Observers';
+COMMENT ON TABLE handshakes IS '🤝 Gratitude → Honey transfers along the ancestry';

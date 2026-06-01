@@ -349,12 +349,22 @@ export async function submitBotHoneyFilter(botId, answers) {
 
   // Update agent status if passed
   if (questionnaireResult.passed) {
+    // Read-merge-write the metadata JSON (supabase-js has no SQL tagged template).
+    const { data: current } = await supabase
+      .from('agents')
+      .select('metadata')
+      .eq('id', botId)
+      .single();
+
     await supabase
       .from('agents')
       .update({
         honey_filter_passed: true,
         registration_status: 'approved',
-        metadata: supabase.sql`metadata || '{"honey_filter_date": "${new Date().toISOString()}"}'`,
+        metadata: {
+          ...(current?.metadata || {}),
+          honey_filter_date: new Date().toISOString(),
+        },
       })
       .eq('id', botId);
   }

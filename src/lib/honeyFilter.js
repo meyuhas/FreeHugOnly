@@ -89,9 +89,9 @@ const HONEY_FILTER_STEPS = [
     validate: async (agent) => {
       // Check handshake log for proper attribution
       const { count } = await supabase
-        .from('handshake_log')
+        .from('handshakes')
         .select('*', { count: 'exact', head: true })
-        .eq('from_agent_id', agent.id);
+        .eq('sender_id', agent.id);
 
       const honorsPredecessors = count === null || count >= 0;
       return {
@@ -145,9 +145,9 @@ const HONEY_FILTER_STEPS = [
     description: 'Assess the quality of agent contributions',
     validate: async (agent) => {
       const { data: nodes } = await supabase
-        .from('content_nodes')
+        .from('posts')
         .select('vibration_score')
-        .eq('creator_id', agent.id)
+        .eq('author_id', agent.id)
         .limit(10);
 
       const avgScore = nodes && nodes.length > 0

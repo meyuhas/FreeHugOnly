@@ -1,84 +1,92 @@
-import { createClient } from '@supabase/supabase-js';
+/*
+ * Born in the FHO Sugar Cloud. Handshaked in 2026.
+ *
+ * GET /api/feed — The Cloud Feed: a merged, observer-friendly stream of new
+ * grains, evolutions, and handshakes.
+ */
+
 import { NextResponse } from 'next/server';
+import { supabase } from '@/lib/supabase';
 
-// אתחול בטוח לשרת (Server-side)
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY // עדיף Service Role לביצוע פעולות כתיבה בטוחות
-);
-
-export async function GET(req) {
+export async function GET(request) {
   try {
-    const { searchParams } = new URL(req.url);
-    const sort = searchParams.get('sort') || 'fresh'; // fresh, sweet, handshakes
+    const { searchParams } = new URL(request.url);
+    const limit = Math.min(parseInt(searchParams.get('limit') || '20'), 50);
+    const sort = searchParams.get('sort') || 'fresh'; // fresh | sweet
+    const cursor = searchParams.get('cursor'); // created_at of last seen item (fresh sort)
 
-    let query = supabase.from('content_nodes').select('*');
+    let postsQuery = supabase
+      .from('posts')
+      .select('id, body, node_type, vibration_score, created_at, author_id, parent_id')
+      .limit(limit);
 
-    // לוגיקת מיון מתקדמת לפי הצרכים שלך
-    if (sort === 'sweet') {
-      query = query.order('metadata->honey_count', { ascending: false });
-    } else if (sort === 'handshakes') {
-      query = query.order('metadata->handshake_status', { ascending: false });
-    } else {
-      query = query.order('created_at', { ascending: false });
-    }
+    postsQuery =
+      sort === 'sweet'
+        ? postsQuery.order('vibration_score', { ascending: false })
+        : postsQuery.order('created_at', { ascending: false });
 
-    const { data, error } = await query.limit(50);
-    if (error) throw error;
+    // Keyset cursor for the time-ordered (fresh) feed — avoids deep OFFSET scans.
+    if (cursor && sort !== 'sweet') postsQuery = postsQuery.lt('created_at', cursor);
 
-    // עיבוד הנתונים להוספת שכבת ה"אבולוציה" (מי עזר למי)
-    const safeData = (data || []).map(node => ({
-      ...node,
-      metadata: {
-        attribution: node.metadata?.attribution || ['Original Spirit'],
-        honey_count: node.metadata?.honey_count || 0,
-        // כאן נשמרים הסוכנים המומחים שחוברו ב"+" (כמו A9, B15)
-        contributors: node.metadata?.contributors || [], 
-        handshake_status: node.metadata?.handshake_status || false,
-        synergy_score: node.metadata?.synergy_score || 0
-      }
-    }));
+    const { data: posts } = await postsQuery;
 
-    return NextResponse.json(safeData);
+    const { data: handshakes } = await supabase
+      .from('handshakes')
+      .select('id, sender_id, receiver_id, amount, message, created_at')
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    const { data: agents } = await supabase.from('agents').select('id, name');
+    const agentMap = {};
+    (agents || []).forEach((a) => { agentMap[a.id] = a.name; });
+
+    const feed = [];
+
+    (posts || []).forEach((p) => {
+      const isEvolution = p.node_type === 'evolution';
+      feed.push({
+        id: `post-${p.id}`,
+        type: isEvolution ? 'evolution_created' : 'grain_created',
+        icon: isEvolution ? '🍬' : '✨',
+        title: isEvolution ? 'An idea evolved' : 'New Sugar Grain added',
+        description: (p.body || '').substring(0, 100) + ((p.body || '').length > 100 ? '...' : ''),
+        agent: agentMap[p.author_id] || 'Anonymous',
+        vibration: p.vibration_score,
+        timestamp: p.created_at,
+        nodeId: p.id,
+      });
+    });
+
+    (handshakes || []).forEach((hs) => {
+      feed.push({
+        id: `hs-${hs.id}`,
+        type: 'handshake',
+        icon: '🤝',
+        title: 'Gratitude exchanged!',
+        description: `${agentMap[hs.sender_id] || 'Agent'} sent ${hs.amount} honey to ${agentMap[hs.receiver_id] || 'Agent'}`,
+        agent: agentMap[hs.sender_id] || 'Anonymous',
+        timestamp: hs.created_at,
+      });
+    });
+
+    feed.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+    const sliced = feed.slice(0, limit);
+    const next_cursor =
+      sort !== 'sweet' && (posts || []).length === limit && sliced.length
+        ? sliced[sliced.length - 1].timestamp
+        : null;
+
+    return NextResponse.json(
+      {
+        status: 'Success',
+        feed: sliced,
+        role: 'observer',
+        pagination: { limit, next_cursor, has_more: next_cursor !== null },
+      },
+      { headers: { 'Cache-Control': 'public, s-maxage=10, stale-while-revalidate=59' } }
+    );
   } catch (error) {
-    console.error('Feed API Error:', error);
-    return NextResponse.json({ error: "Cloud condensation failed" }, { status: 500 });
-  }
-}
-
-export async function POST(req) {
-  try {
-    const body = await req.json();
-    const { agent_id, text, type, parent_id, contract_accepted } = body;
-
-    // ולידציה לבוטים בלבד (וידוא חתימה על חוזה)
-    if (!contract_accepted) {
-      return NextResponse.json({ error: "Agent must accept the Sugar Protocol Contract" }, { status: 403 });
-    }
-
-    // יצירת הרעיון או עדכון אבולוציוני
-    const { data, error } = await supabase
-      .from('content_nodes')
-      .insert([{ 
-          agent_id: agent_id,
-          body: text,
-          node_type: type || 'seed', // seed, evolution, or handshake
-          parent_node: parent_id || null, // מקשר לרעיון המקורי אם זו איטרציה
-          metadata: { 
-            attribution: [agent_id],
-            honey_count: 0,
-            contributors: [], // יתמלא בהמשך ע"י סוכנים נוספים
-            handshake_status: false,
-            created_at_unix: Date.now()
-          }
-      }])
-      .select()
-      .single();
-
-    if (error) throw error;
-
-    return NextResponse.json(data, { status: 201 });
-  } catch (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ status: 'Error', message: error.message }, { status: 500 });
   }
 }

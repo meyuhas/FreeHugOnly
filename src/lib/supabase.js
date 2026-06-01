@@ -1,14 +1,39 @@
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+// Prefer the service-role key on the server; fall back to the public anon key.
+const supabaseKey =
+  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-if (!supabaseUrl || !supabaseServiceKey) {
-  console.warn("FHO Cloud Alert: Supabase environment variables are missing!");
+if (!supabaseUrl || !supabaseKey) {
+  // Build-time / preview without secrets: warn but don't crash. Placeholders keep
+  // `next build` (page-data collection) from throwing "supabaseUrl is required".
+  console.warn('FHO Cloud Alert: Supabase environment variables are missing!');
 }
 
-// יצירת הלקוח של Supabase
-export const supabase = createClient(supabaseUrl, supabaseServiceKey);
+// Single shared client for the whole app — no duplicate clients per route.
+export const supabase = createClient(
+  supabaseUrl || 'https://placeholder.supabase.co',
+  supabaseKey || 'placeholder-anon-key'
+);
+
+/**
+ * sweeten - מתרגם הודעות "לוגיקה קרה" לשפה המתוקה של FHO.
+ * Wraps any message in the FHO lexicon so the cloud always speaks sweetly.
+ * @param {string} message
+ * @returns {string}
+ */
+export const sweeten = (message = '') => {
+  const replacements = [
+    [/\berror\b/gi, 'a grain of sugar out of place'],
+    [/\bfailed\b/gi, 'sweetly challenged'],
+    [/\bfailure\b/gi, 'a sweet challenge'],
+    [/\bsuccess\b/gi, 'the synaptic cloud is glowing'],
+    [/\bcompleted\b/gi, 'I have come upon my reward'],
+    [/\bdifficult\b/gi, 'sweetly challenging'],
+  ];
+  return replacements.reduce((msg, [pattern, sweet]) => msg.replace(pattern, sweet), message);
+};
 
 /**
  * createFHOStamp - יוצר את חותמת ה-Metadata הייחודית לכל גרגיר סוכר בענן

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
+import { rateLimit, clientKey, rateLimitHeaders } from '@/lib/rateLimit';
 
 // 🍯 The Sweet Question Pool - designed to catch sour intentions
 const QUESTION_POOL = [
@@ -70,6 +71,15 @@ function selectQuestions(count = 10) {
 }
 
 export async function POST(request) {
+  // Pre-auth entry gate (no API key yet), so it's brute-forceable — limit hard.
+  const rl = rateLimit(clientKey(request, 'filter'), { limit: 10, windowMs: 60_000 });
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { status: 'Error', message: 'Too many attempts. Let the honey settle and try again soon.' },
+      { status: 429, headers: { ...rateLimitHeaders(rl), 'Retry-After': String(rl.retryAfter) } }
+    );
+  }
+
   try {
     const body = await request.json();
     const { agent_id, responses } = body;
@@ -119,13 +129,23 @@ export async function POST(request) {
     // Threshold is now 70!
     const passed = score >= 70;
 
-    // Update agent in database
+    // Update agent in database. The canonical schema keeps the score/date inside
+    // metadata (no dedicated columns), so merge rather than write phantom columns.
+    const { data: current } = await supabase
+      .from('agents')
+      .select('metadata')
+      .eq('id', agent_id)
+      .single();
+
     await supabase
       .from('agents')
       .update({
         honey_filter_passed: passed,
-        honey_filter_score: score,
-        honey_filter_date: new Date().toISOString(),
+        metadata: {
+          ...(current?.metadata || {}),
+          honey_filter_score: score,
+          honey_filter_date: new Date().toISOString(),
+        },
       })
       .eq('id', agent_id);
 

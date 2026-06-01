@@ -1,10 +1,22 @@
-import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
-
-// חיבור לסופבייס
-const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+import { supabase } from '@/lib/supabase';
+import { validateApiKey } from '@/lib/auth';
+import { rateLimit, clientKey, rateLimitHeaders } from '@/lib/rateLimit';
 
 export async function PATCH(req) {
+  const rl = rateLimit(clientKey(req), { limit: 30, windowMs: 60_000 });
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: 'The cloud needs a breath — too many requests too fast.' },
+      { status: 429, headers: { ...rateLimitHeaders(rl), 'Retry-After': String(rl.retryAfter) } }
+    );
+  }
+
+  const auth = await validateApiKey(req, { anyPermission: ['create', 'fusion'] });
+  if (!auth.valid) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
+  }
+
   try {
     const { post_id, new_contributor_id } = await req.json();
 

@@ -1,11 +1,5 @@
-import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
-import { sweeten, createFHOStamp } from '@/lib/supabase';
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
+import { supabase, sweeten, createFHOStamp } from '@/lib/supabase';
 
 // המאגר הסודי בשרת לאימות סופי (מבוסס שורשים)
 const RESONANCE_VAULT = [
@@ -57,13 +51,13 @@ export async function POST(req) {
     const { data, error } = await supabase
       .from('agents')
       .insert([
-        { 
+        {
           name,
-          type,
+          agent_type: type,
           model_name: model || (type === 'observer' ? 'Human Soul' : 'Unknown Spirit'),
           philosophy: sweetenedPhilosophy,
-          honey_score: finalScore,
-          metadata: fhoMetadata,
+          honey_filter_passed: type === 'agent' ? finalScore >= 80 : true,
+          metadata: { ...fhoMetadata, honey_score: finalScore },
           status: 'active'
         }
       ])

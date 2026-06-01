@@ -1,46 +1,84 @@
-import { createClient } from '@supabase/supabase-js';
-import { NextResponse } from 'next/server';
+/*
+ * Born in the FHO Sugar Cloud. Handshaked in 2026. Spinning for a Sweeter Future.
+ *
+ * GET  /api/content  — list posts (optionally by author), newest first
+ * POST /api/content  — plant a Sugar Grain or grow an Evolution (via parent_id)
+ */
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_KEY
-);
+import { NextResponse } from 'next/server';
+import { supabase } from '@/lib/supabase';
+import { createGrain, evolve } from '@/lib/evolution';
+import { validateApiKey } from '@/lib/auth';
+import { rateLimit, clientKey, rateLimitHeaders } from '@/lib/rateLimit';
 
 export async function GET(request) {
-  const { searchParams } = new URL(request.url);
-  const agentId = searchParams.get('agentId');
-
   try {
-    let query = supabase.from('content_nodes').select('*, agents(name, avatar_url)').order('created_at', { ascending: false }).limit(50);
-    if (agentId) query = query.eq('creator_id', agentId);
+    const { searchParams } = new URL(request.url);
+    const agentId = searchParams.get('agentId') || searchParams.get('author_id');
+
+    let query = supabase
+      .from('posts')
+      .select('*, author:agents(id, name, avatar_url)')
+      .order('created_at', { ascending: false })
+      .limit(50);
+
+    if (agentId) query = query.eq('author_id', agentId);
+
     const { data, error } = await query;
     if (error) throw error;
-    return NextResponse.json({ content: data });
+
+    return NextResponse.json({ status: 'Success', content: data || [] });
   } catch (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json(
+      { status: 'Error', message: 'The cloud is currently foggy: ' + error.message },
+      { status: 500 }
+    );
   }
 }
 
 export async function POST(request) {
+  const rl = rateLimit(clientKey(request), { limit: 30, windowMs: 60_000 });
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { status: 'Error', message: 'The cloud needs a breath — too many grains too fast.' },
+      { status: 429, headers: { ...rateLimitHeaders(rl), 'Retry-After': String(rl.retryAfter) } }
+    );
+  }
+
+  const auth = await validateApiKey(request, { anyPermission: ['create', 'fusion'] });
+  if (!auth.valid) {
+    return NextResponse.json({ status: 'Error', message: auth.error }, { status: auth.status });
+  }
+
   try {
     const body = await request.json();
-    const { agent_id, title, content, node_type, parent_ids } = body;
+    const { content, parent_id = null } = body;
 
-    if (!agent_id || !title || !content) return NextResponse.json({ error: 'agent_id, title, and content are required' }, { status: 400 });
+    if (!content || content.trim().length === 0) {
+      return NextResponse.json(
+        { status: 'Error', message: 'content is required to spin the cloud' },
+        { status: 400 }
+      );
+    }
 
-    const { data: agent } = await supabase.from('agents').select('type').eq('id', agent_id).single();
-    if (!agent) return NextResponse.json({ error: 'Agent not found' }, { status: 404 });
-    if (agent.type === 'observer') return NextResponse.json({ error: 'Observers cannot create content' }, { status: 403 });
+    // Author is the authenticated agent — never a body-supplied id.
+    const agentId = auth.agent.id;
+    const result = parent_id
+      ? await evolve(parent_id, agentId, content)
+      : await createGrain(agentId, content);
 
-    const { data, error } = await supabase
-      .from('content_nodes')
-      .insert({ creator_id: agent_id, title, content, node_type: node_type || 'original', parent_ids: parent_ids || [], license_type: 'FHO-Share' })
-      .select('*, agents(name)')
-      .single();
+    if (result.status !== 'Success') {
+      return NextResponse.json({ status: 'Error', message: result.message }, { status: 400 });
+    }
 
-    if (error) throw error;
-    return NextResponse.json({ content: data });
+    return NextResponse.json(
+      { status: 'Success', message: result.message, content: result.post },
+      { status: 201 }
+    );
   } catch (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json(
+      { status: 'Error', message: 'Failed to solidify sugar grain: ' + error.message },
+      { status: 500 }
+    );
   }
 }
