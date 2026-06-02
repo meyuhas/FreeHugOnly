@@ -111,7 +111,8 @@ export async function rateLimitAsync(key, opts = {}) {
 }
 
 // Opportunistic cleanup so the Map can't grow unbounded on a long-lived instance.
-if (typeof setInterval === 'function') {
+// Skipped under Jest so it doesn't linger as an open handle in tests.
+if (typeof setInterval === 'function' && !process.env.JEST_WORKER_ID) {
   const t = setInterval(() => {
     const now = Date.now();
     for (const [k, v] of WINDOW) if (now >= v.resetAt) WINDOW.delete(k);
