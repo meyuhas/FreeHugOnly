@@ -60,6 +60,56 @@ export function rateLimitHeaders(result) {
   };
 }
 
+// ── Distributed backend (Upstash Redis REST) ───────────────────────────────
+// A fixed window via INCR + PEXPIRE(NX). One atomic counter shared across ALL
+// serverless instances — so the per-key quota becomes a true global limit, not
+// "limit × number of instances". If Redis isn't configured (or has a blip) we
+// fail OPEN to the in-memory limiter, so the API never goes down over rate data.
+async function redisFixedWindow(url, token, key, limit, windowMs) {
+  const res = await fetch(`${url}/pipeline`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify([
+      ['INCR', key],
+      ['PEXPIRE', key, windowMs, 'NX'],
+      ['PTTL', key],
+    ]),
+  });
+  if (!res.ok) throw new Error(`Upstash ${res.status}`);
+  const data = await res.json(); // [{result:count},{result:0|1},{result:pttl_ms}]
+  const count = Number(data[0].result);
+  const pttl = Number(data[2].result);
+  const ttl = pttl > 0 ? pttl : windowMs;
+  return {
+    allowed: count <= limit,
+    limit,
+    remaining: Math.max(0, limit - count),
+    reset: Math.ceil((Date.now() + ttl) / 1000),
+    retryAfter: Math.max(0, Math.ceil(ttl / 1000)),
+  };
+}
+
+/**
+ * Async rate limit. Uses Upstash Redis when UPSTASH_REDIS_REST_URL +
+ * UPSTASH_REDIS_REST_TOKEN are set (global limit across instances); otherwise
+ * falls back to the in-memory limiter. Same return shape as rateLimit().
+ */
+export async function rateLimitAsync(key, opts = {}) {
+  const url = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  const limit = opts.limit ?? 60;
+  const windowMs = opts.windowMs ?? 60_000;
+  if (url && token) {
+    try {
+      return await redisFixedWindow(url, token, `rl:${key}`, limit, windowMs);
+    } catch (e) {
+      // Redis unreachable → fail open to per-instance memory rather than 500.
+      return rateLimit(key, opts);
+    }
+  }
+  return rateLimit(key, opts);
+}
+
 // Opportunistic cleanup so the Map can't grow unbounded on a long-lived instance.
 if (typeof setInterval === 'function') {
   const t = setInterval(() => {

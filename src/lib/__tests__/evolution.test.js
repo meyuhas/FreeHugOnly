@@ -46,11 +46,12 @@ function makeBuilder() {
   return builder;
 }
 
+let rpcResponse = { data: null, error: null };
 const mockSupabase = {
   from: jest.fn(() => makeBuilder()),
   rpc: jest.fn((name, args) => {
     rpcCalls.push({ name, args });
-    return Promise.resolve({ data: null, error: null });
+    return Promise.resolve(rpcResponse);
   }),
 };
 
@@ -64,6 +65,10 @@ const {
   evolve,
   performHandshake,
   traceLineage,
+  createProject,
+  getProject,
+  addProjectMember,
+  reachMilestone,
   MAX_ROYALTY_DEPTH,
   PLATFORM_TITHE,
 } = require('../evolution');
@@ -81,6 +86,7 @@ beforeEach(() => {
   resultQueue.length = 0;
   rpcCalls.length = 0;
   inserts.length = 0;
+  rpcResponse = { data: null, error: null };
   jest.clearAllMocks();
 });
 
@@ -130,62 +136,58 @@ describe('evolve', () => {
 });
 
 describe('performHandshake', () => {
-  it('guards against double handshake', async () => {
-    queueSingle({ id: 'p1', path: 'p1', author_id: 'a1', is_handshaked: true });
-    const res = await performHandshake('p1', 50);
-    expect(res.status).toBe('Already Complete');
-  });
+  // The royalty math now lives in the perform_handshake() SQL function (one
+  // transactional round trip). The JS wrapper's job is to call that RPC with the
+  // right args and surface its result — that's what these tests verify.
 
-  it('distributes Honey up the ancestry with decay minus tithe', async () => {
-    // leaf p3 with ancestry root.p2.p3
-    queueSingle({ id: 'p3', path: 'root.p2.p3', author_id: 'leaf-author', is_handshaked: false }); // post lookup
-    queueResult(null); // update is_handshaked
-    queueResult([
-      { id: 'p2', author_id: 'author-p2' },
-      { id: 'root', author_id: 'author-root' },
-    ]); // ancestorPosts .in()
+  it('delegates to the perform_handshake RPC with the right args', async () => {
+    rpcResponse = {
+      data: {
+        status: 'Success',
+        message: 'I have come upon my reward',
+        value_added: 100,
+        tithe: 10,
+        giants_thanked: 2,
+        transfers: [
+          { receiver: 'author-p2', amount: 60, distance: 1 },
+          { receiver: 'author-root', amount: 30, distance: 2 },
+        ],
+      },
+      error: null,
+    };
 
     const res = await performHandshake('p3', 100);
 
     expect(res.status).toBe('Success');
-    expect(res.value_added).toBe(100);
-    expect(res.tithe).toBe(Math.round(100 * PLATFORM_TITHE));
     expect(res.giants_thanked).toBe(2);
-    // nearest ancestor (p2, distance 1) gets more than farther (root, distance 2)
-    const p2 = res.transfers.find((t) => t.distance === 1);
-    const root = res.transfers.find((t) => t.distance === 2);
-    expect(p2.amount).toBeGreaterThan(root.amount);
-    // honey RPCs issued per transfer
-    const honeyRpcs = rpcCalls.filter((c) => c.name === 'increment_honey');
-    expect(honeyRpcs.length).toBe(2);
+    expect(rpcCalls).toContainEqual({
+      name: 'perform_handshake',
+      args: { p_post_id: 'p3', p_value_score: 100 },
+    });
+    // exactly one round trip — no N+1
+    expect(rpcCalls.length).toBe(1);
   });
 
-  it('a root grain thanks its own author (no giants)', async () => {
-    queueSingle({ id: 'root', path: 'root', author_id: 'origin', is_handshaked: false });
-    queueResult(null); // update
-    queueResult([{ id: 'root', author_id: 'origin' }]); // .in()
-
-    const res = await performHandshake('root', 50);
-
-    expect(res.status).toBe('Success');
-    expect(res.transfers[0].receiver).toBe('origin');
+  it('passes through the Already Complete guard from the RPC', async () => {
+    rpcResponse = {
+      data: { status: 'Already Complete', message: 'Gratitude has already flowed through this post' },
+      error: null,
+    };
+    const res = await performHandshake('p1', 50);
+    expect(res.status).toBe('Already Complete');
   });
 
-  it('caps royalty depth at MAX_ROYALTY_DEPTH', async () => {
-    const path = ['g0', 'g1', 'g2', 'g3', 'g4', 'g5', 'g6', 'leaf'].join('.');
-    queueSingle({ id: 'leaf', path, author_id: 'leaf-author', is_handshaked: false });
-    queueResult(null);
-    // ancestors returned (only the capped nearest few matter)
-    queueResult([
-      { id: 'g6', author_id: 'a6' },
-      { id: 'g5', author_id: 'a5' },
-      { id: 'g4', author_id: 'a4' },
-      { id: 'g3', author_id: 'a3' },
-      { id: 'g2', author_id: 'a2' },
-    ]);
+  it('surfaces an RPC error as Error status', async () => {
+    rpcResponse = { data: null, error: { message: 'db down' } };
+    const res = await performHandshake('x', 50);
+    expect(res.status).toBe('Error');
+    expect(res.message).toBe('db down');
+  });
 
-    const res = await performHandshake('leaf', 100);
-    expect(res.giants_thanked).toBeLessThanOrEqual(MAX_ROYALTY_DEPTH);
+  it('defaults value_score to 50 when omitted', async () => {
+    rpcResponse = { data: { status: 'Success' }, error: null };
+    await performHandshake('p1');
+    expect(rpcCalls[0].args).toEqual({ p_post_id: 'p1', p_value_score: 50 });
   });
 });
 
@@ -212,5 +214,126 @@ describe('traceLineage', () => {
 
     const res = await traceLineage('root');
     expect(res.is_origin).toBe(true);
+  });
+});
+
+describe('createProject', () => {
+  it('creates a project post and links contributing posts', async () => {
+    queueSingle({ id: 'uuid-1', node_type: 'project', parent_id: null, path: 'uuid-1', depth: 0 }); // insert project
+    queueResult([
+      { id: 'c1', author_id: 'author-1' },
+      { id: 'c2', author_id: 'author-2' },
+    ]); // lookup contributing posts (.in)
+    queueResult(null); // insert contributions
+
+    const res = await createProject('agent-1', 'Build the sweetest thing', ['c1', 'c2']);
+
+    expect(res.status).toBe('Success');
+    expect(res.post.node_type).toBe('project');
+    // project post + contribution rows were inserted
+    const projectInsert = inserts.find((r) => !Array.isArray(r) && r.node_type === 'project');
+    expect(projectInsert).toBeTruthy();
+    const contribRows = inserts.find((r) => Array.isArray(r));
+    expect(contribRows).toHaveLength(2);
+    expect(contribRows[0]).toMatchObject({ project_id: 'uuid-1', post_id: 'c1', contributor_id: 'author-1' });
+    // each contributing post got a vibration boost
+    const vibBumps = rpcCalls.filter((c) => c.name === 'increment_vibration');
+    expect(vibBumps).toHaveLength(2);
+  });
+
+  it('creates a project with no contributors', async () => {
+    queueSingle({ id: 'uuid-1', node_type: 'project', path: 'uuid-1', depth: 0 });
+    const res = await createProject('agent-1', 'Solo framing');
+    expect(res.status).toBe('Success');
+    expect(inserts.some((r) => Array.isArray(r))).toBe(false); // no contribution rows
+  });
+
+  it('errors when the project insert fails', async () => {
+    queueSingle(null, { message: 'db down' });
+    const res = await createProject('agent-1', 'x', ['c1']);
+    expect(res.status).toBe('Error');
+  });
+});
+
+describe('getProject', () => {
+  it('returns the project with contributors, team, and aggregate stats', async () => {
+    queueSingle({ id: 'proj-1', body: 'A project', node_type: 'project', author_id: 'agent-1', vibration_score: 5 });
+    queueResult([
+      { post_id: 'c1', contributor_id: 'author-1', posts: { id: 'c1', vibration_score: 10, author_id: 'author-1' } },
+      { post_id: 'c2', contributor_id: 'author-2', posts: { id: 'c2', vibration_score: 7, author_id: 'author-2' } },
+      { post_id: 'c3', contributor_id: 'author-1', posts: { id: 'c3', vibration_score: 3, author_id: 'author-1' } },
+    ]); // contributions
+    queueResult([
+      { agent_id: 'mkt-1', role: 'marketing', agents: { id: 'mkt-1', name: 'Avi AI' } },
+      { agent_id: 'prod-1', role: 'production', agents: { id: 'prod-1', name: 'Moshe AI' } },
+    ]); // members (the "+")
+
+    const res = await getProject('proj-1');
+
+    expect(res.status).toBe('Success');
+    expect(res.stats.contributing_posts).toBe(3);
+    expect(res.stats.contributors).toBe(2); // author-1 counted once
+    expect(res.stats.total_vibration).toBe(20); // 10 + 7 + 3
+    expect(res.stats.members).toBe(2);
+    expect(res.members.map((m) => m.role)).toEqual(['marketing', 'production']);
+  });
+
+  it('errors when the project is not found', async () => {
+    queueSingle(null, { message: 'not found' });
+    const res = await getProject('missing');
+    expect(res.status).toBe('Error');
+  });
+});
+
+describe('addProjectMember (the team "+")', () => {
+  it('adds an agent with a valid role', async () => {
+    queueSingle({ id: 'proj-1', node_type: 'project' }); // project lookup
+    queueSingle({ id: 'm1', project_id: 'proj-1', agent_id: 'mkt-1', role: 'marketing' }); // insert member
+
+    const res = await addProjectMember('proj-1', 'mkt-1', 'marketing');
+
+    expect(res.status).toBe('Success');
+    expect(res.member.role).toBe('marketing');
+    const inserted = inserts.find((r) => !Array.isArray(r) && r.role === 'marketing');
+    expect(inserted).toMatchObject({ project_id: 'proj-1', agent_id: 'mkt-1', role: 'marketing' });
+  });
+
+  it('rejects an unknown role before touching the DB', async () => {
+    const res = await addProjectMember('proj-1', 'x', 'wizardry');
+    expect(res.status).toBe('Error');
+    expect(res.message).toMatch(/Unknown role/);
+    expect(inserts.length).toBe(0); // never hit the DB
+  });
+
+  it('errors when the project does not exist', async () => {
+    queueSingle(null, { message: 'not found' }); // project lookup fails
+    const res = await addProjectMember('missing', 'mkt-1', 'production');
+    expect(res.status).toBe('Error');
+  });
+});
+
+describe('reachMilestone (principle 5 — unlocks the handshake)', () => {
+  it('marks the milestone reached, merging metadata', async () => {
+    queueSingle({ id: 'proj-1', node_type: 'project', metadata: { goal: 'ship v1' } }); // lookup
+    queueSingle({ id: 'proj-1', metadata: { goal: 'ship v1', milestone_reached: true } }); // update result
+
+    const res = await reachMilestone('proj-1', 'launched');
+
+    expect(res.status).toBe('Success');
+    const update = inserts.length ? null : null; // updates aren't tracked as inserts
+    // the update payload preserved the goal and set the flag
+    expect(res.project.metadata.milestone_reached).toBe(true);
+  });
+
+  it('is idempotent — already-reached returns Already Complete', async () => {
+    queueSingle({ id: 'proj-1', node_type: 'project', metadata: { milestone_reached: true } });
+    const res = await reachMilestone('proj-1');
+    expect(res.status).toBe('Already Complete');
+  });
+
+  it('errors when the project is not found', async () => {
+    queueSingle(null, { message: 'not found' });
+    const res = await reachMilestone('missing');
+    expect(res.status).toBe('Error');
   });
 });

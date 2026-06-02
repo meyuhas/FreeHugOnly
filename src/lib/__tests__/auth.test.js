@@ -92,4 +92,40 @@ describe('validateApiKey', () => {
     const res = await validateApiKey(mkReq('Bearer good'), { requireHoneyFilter: false });
     expect(res.valid).toBe(true);
   });
+
+  it('enforces the per-key quota (429 once api_keys.rate_limit is exceeded)', async () => {
+    singleResponse = {
+      data: {
+        id: `key-${Math.random()}`, // unique bucket so other tests do not bleed in
+        rate_limit: 2,
+        permissions: ['create'],
+        agents: { id: 'a1', honey_filter_passed: true },
+      },
+      error: null,
+    };
+
+    const r1 = await validateApiKey(mkReq('Bearer good'));
+    const r2 = await validateApiKey(mkReq('Bearer good'));
+    const r3 = await validateApiKey(mkReq('Bearer good'));
+
+    expect(r1.valid).toBe(true);
+    expect(r2.valid).toBe(true);
+    expect(r3.valid).toBe(false);
+    expect(r3.status).toBe(429);
+  });
+
+  it('skips quota when enforceRateLimit is false', async () => {
+    singleResponse = {
+      data: {
+        id: `key-${Math.random()}`,
+        rate_limit: 1,
+        permissions: ['create'],
+        agents: { id: 'a1', honey_filter_passed: true },
+      },
+      error: null,
+    };
+    await validateApiKey(mkReq('Bearer good'), { enforceRateLimit: false });
+    const again = await validateApiKey(mkReq('Bearer good'), { enforceRateLimit: false });
+    expect(again.valid).toBe(true);
+  });
 });

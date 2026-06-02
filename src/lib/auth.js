@@ -11,6 +11,7 @@
 
 import crypto from 'crypto';
 import { supabase } from './supabase';
+import { rateLimitAsync } from './rateLimit';
 
 /** SHA-256 a raw API key into the hash we store/compare against. */
 export function hashApiKey(rawKey) {
@@ -25,11 +26,14 @@ export function hashApiKey(rawKey) {
  * @param {string[]} [opts.anyPermission] - pass if the key has ANY of these
  *        permissions (e.g. ['fusion','create']). Omit to skip the check.
  * @param {boolean} [opts.requireHoneyFilter=true] - require honey_filter_passed.
+ * @param {boolean} [opts.enforceRateLimit=true] - enforce the key's per-minute
+ *        quota from api_keys.rate_limit (the real defense against a single bot
+ *        flooding the cloud — each key is bucketed independently).
  * @returns {Promise<{valid:boolean, status?:number, error?:string,
- *                    agent?:object, keyRecord?:object}>}
+ *                    agent?:object, keyRecord?:object, rateLimit?:object}>}
  */
 export async function validateApiKey(request, opts = {}) {
-  const { anyPermission, requireHoneyFilter = true } = opts;
+  const { anyPermission, requireHoneyFilter = true, enforceRateLimit = true } = opts;
 
   const authHeader = request.headers.get('authorization');
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -71,6 +75,23 @@ export async function validateApiKey(request, opts = {}) {
         error: `This API key lacks the required permission (${anyPermission.join(' or ')})`,
       };
     }
+  }
+
+  // Per-key quota: each API key gets its own bucket sized by api_keys.rate_limit.
+  // This is what stops one bot (or one leaked key) from flooding the cloud, even
+  // if it rotates IPs. Default 100 req/min when the column is unset.
+  if (enforceRateLimit) {
+    const limit = keyRecord.rate_limit || 100;
+    const rl = await rateLimitAsync(`key:${keyRecord.id}`, { limit, windowMs: 60_000 });
+    if (!rl.allowed) {
+      return {
+        valid: false,
+        status: 429,
+        error: 'A sweeter pace, please — this key has reached its per-minute limit.',
+        rateLimit: rl,
+      };
+    }
+    return { valid: true, agent: keyRecord.agents, keyRecord, rateLimit: rl };
   }
 
   return { valid: true, agent: keyRecord.agents, keyRecord };

@@ -3,7 +3,7 @@
  * Born in the FHO Sugar Cloud. Handshaked in 2026.
  */
 
-const { rateLimit, clientKey, rateLimitHeaders } = require('../rateLimit');
+const { rateLimit, rateLimitAsync, clientKey, rateLimitHeaders } = require('../rateLimit');
 
 describe('rateLimit', () => {
   it('allows up to the limit then blocks', () => {
@@ -31,6 +31,16 @@ describe('rateLimit', () => {
     rateLimit(a, { limit: 1, windowMs: 10_000 });
     expect(rateLimit(a, { limit: 1, windowMs: 10_000 }).allowed).toBe(false);
     expect(rateLimit(b, { limit: 1, windowMs: 10_000 }).allowed).toBe(true);
+  });
+});
+
+describe('rateLimitAsync (no Redis env → in-memory fallback)', () => {
+  it('behaves like rateLimit when Upstash env is unset', async () => {
+    const key = `async-${Math.random()}`;
+    const opts = { limit: 2, windowMs: 10_000 };
+    expect((await rateLimitAsync(key, opts)).allowed).toBe(true);
+    expect((await rateLimitAsync(key, opts)).allowed).toBe(true);
+    expect((await rateLimitAsync(key, opts)).allowed).toBe(false);
   });
 });
 

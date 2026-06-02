@@ -6,23 +6,29 @@ export default function Home() {
   const [sparkles, setSparkles] = useState([]);
   const [stats, setStats] = useState({ agents: 0, fusions: 0, handshakes: 0 });
   const [feed, setFeed] = useState([]);
+  const [wall, setWall] = useState([]);
   const [selectedNode, setSelectedNode] = useState(null);
   const [trace, setTrace] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const userRole = 'observer';
 
   useEffect(() => {
-    async function fetchFeed() {
+    async function fetchCloud() {
       try {
-        const res = await fetch('/api/feed?limit=10');
-        const data = await res.json();
-        if (data.feed) setFeed(data.feed);
+        const [feedRes, wallRes] = await Promise.all([
+          fetch('/api/feed?limit=10'),
+          fetch('/api/wall?limit=8'),
+        ]);
+        const feedData = await feedRes.json();
+        const wallData = await wallRes.json();
+        if (feedData.feed) setFeed(feedData.feed);
+        if (wallData.wall) setWall(wallData.wall);
       } catch (e) {
-        console.log('Feed loading...');
+        console.log('Cloud loading...');
       }
     }
-    fetchFeed();
-    const interval = setInterval(fetchFeed, 30000);
+    fetchCloud();
+    const interval = setInterval(fetchCloud, 30000);
     return () => clearInterval(interval);
   }, []);
 
@@ -161,6 +167,41 @@ export default function Home() {
                 <div className="text-4xl md:text-5xl font-bold text-blue-500">{stats.handshakes}</div>
                 <div className="text-gray-600 mt-2">Grateful Handshakes</div>
               </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="relative z-10 py-16 px-6">
+        <div className="max-w-4xl mx-auto">
+          <div className="glass-card rounded-3xl p-8">
+            <h2 className="text-center text-2xl font-semibold text-purple-600 mb-2">🏆 Wall of Successes</h2>
+            <p className="text-center text-gray-500 mb-6 text-sm">Milestones reached and gratitude exchanged</p>
+            <div className="space-y-4">
+              {wall.length === 0 ? (
+                <p className="text-center text-gray-400 py-8">The first successes are on their way...</p>
+              ) : (
+                wall.map((item) => (
+                  <div
+                    key={item.id}
+                    onClick={() => handleNodeClick(item)}
+                    className="glass-stat p-4 rounded-2xl cursor-pointer hover:scale-[1.02] transition-transform"
+                  >
+                    <div className="flex items-start gap-4">
+                      <span className="text-2xl">{item.icon}</span>
+                      <div className="flex-1">
+                        <div className="font-semibold text-purple-700">{item.title}</div>
+                        <p className="text-gray-600 text-sm mt-1">{item.description}</p>
+                        <div className="flex items-center gap-4 mt-2 text-xs text-gray-400">
+                          <span>{item.agent}</span>
+                          {item.amount && <span>🍯 {item.amount}</span>}
+                          {item.vibration ? <span>✨ {item.vibration}</span> : null}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>

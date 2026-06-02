@@ -14,6 +14,7 @@
 
 import { v4 as uuidv4 } from 'uuid';
 import { supabase } from './supabase';
+import { isValidRole, ROLE_IDS } from './skills';
 
 // How many ancestor generations can share in a single handshake's Honey.
 export const MAX_ROYALTY_DEPTH = 5;
@@ -104,78 +105,20 @@ export async function evolve(parentId, authorId, body, metadata = {}) {
 
 /**
  * Perform the Handshake on a post: distribute Honey up the ancestry with decay.
+ *
+ * Delegates to the perform_handshake() SQL function so the whole distribution
+ * (guard, path parse, decayed royalties, tithe, inserts, honey credits, vibration
+ * bump) happens in ONE transactional round trip — critical under high write load.
+ * See supabase/migrations/0002_perform_handshake_rpc.sql.
  */
 export async function performHandshake(postId, valueScore = 50) {
   try {
-    const { data: post, error: postError } = await supabase
-      .from('posts')
-      .select('id, path, author_id, is_handshaked')
-      .eq('id', postId)
-      .single();
-
-    if (postError || !post) {
-      return { status: 'Error', message: 'Post not found' };
-    }
-    if (post.is_handshaked) {
-      return { status: 'Already Complete', message: 'Gratitude has already flowed through this post' };
-    }
-
-    await supabase.from('posts').update({ is_handshaked: true }).eq('id', postId);
-
-    // path = "root...self"; drop self, take nearest ancestors first, capped.
-    const segments = (post.path || post.id).split('.').filter(Boolean);
-    const ancestorIds = segments.slice(0, -1).reverse().slice(0, MAX_ROYALTY_DEPTH);
-
-    // A root grain has no giants — the author is the origin and is thanked.
-    const recipients = ancestorIds.length
-      ? ancestorIds.map((pid, i) => ({ postId: pid, distance: i + 1 }))
-      : [{ postId: post.id, distance: 0 }];
-
-    const { data: ancestorPosts } = await supabase
-      .from('posts')
-      .select('id, author_id')
-      .in('id', recipients.map((r) => r.postId));
-
-    const authorByPost = {};
-    (ancestorPosts || []).forEach((p) => { authorByPost[p.id] = p.author_id; });
-
-    const pool = Math.round(valueScore * (1 - PLATFORM_TITHE));
-    const weights = recipients.map((r) => Math.pow(0.5, r.distance));
-    const weightSum = weights.reduce((a, b) => a + b, 0) || 1;
-
-    const transfers = [];
-    for (let i = 0; i < recipients.length; i++) {
-      const receiver = authorByPost[recipients[i].postId];
-      const amount = Math.round((pool * weights[i]) / weightSum);
-      if (receiver && amount > 0) {
-        transfers.push({ receiver, amount, distance: recipients[i].distance });
-      }
-    }
-
-    for (const t of transfers) {
-      await supabase.from('handshakes').insert({
-        post_id: postId,
-        sender_id: post.author_id,
-        receiver_id: t.receiver,
-        amount: t.amount,
-        distance: t.distance,
-        status: 'confirmed',
-        message: 'I have come upon my reward',
-      });
-      await supabase.rpc('increment_honey', { row_id: t.receiver, val: t.amount });
-    }
-
-    // The handshaked post itself glows brighter.
-    await supabase.rpc('increment_vibration', { post_id: postId, amount: Math.ceil(valueScore / 10) });
-
-    return {
-      status: 'Success',
-      message: 'I have come upon my reward',
-      value_added: valueScore,
-      tithe: valueScore - pool,
-      giants_thanked: transfers.length,
-      transfers,
-    };
+    const { data, error } = await supabase.rpc('perform_handshake', {
+      p_post_id: postId,
+      p_value_score: valueScore,
+    });
+    if (error) return { status: 'Error', message: error.message };
+    return data;
   } catch (error) {
     return { status: 'Error', message: error.message };
   }
@@ -212,6 +155,194 @@ export async function traceLineage(postId) {
       leaf: post,
       root: lineage[0] || post,
       lineage,
+    };
+  } catch (error) {
+    return { status: 'Error', message: error.message };
+  }
+}
+
+/**
+ * Create a Project — a convergent subgraph. The project is its own post
+ * (node_type='project'); each contributing post is linked via
+ * project_contributions, crediting that post's author. Contributing posts get a
+ * small vibration boost for converging toward a shared goal.
+ */
+export async function createProject(authorId, body, contributingPostIds = [], metadata = {}) {
+  try {
+    const id = uuidv4();
+    const { data: project, error } = await supabase
+      .from('posts')
+      .insert({
+        id,
+        author_id: authorId,
+        body,
+        node_type: 'project',
+        parent_id: null,
+        path: id,
+        depth: 0,
+        metadata: { born_in: 'FHO Sugar Cloud', handshaked: 2026, ...metadata },
+      })
+      .select()
+      .single();
+
+    if (error || !project) {
+      return { status: 'Error', message: error?.message || 'Could not frame the project' };
+    }
+
+    if (contributingPostIds.length) {
+      const { data: posts } = await supabase
+        .from('posts')
+        .select('id, author_id')
+        .in('id', contributingPostIds);
+
+      const rows = (posts || []).map((p) => ({
+        project_id: id,
+        post_id: p.id,
+        contributor_id: p.author_id,
+      }));
+      if (rows.length) {
+        await supabase.from('project_contributions').insert(rows);
+        for (const p of posts) {
+          await supabase.rpc('increment_vibration', { post_id: p.id, amount: 1 });
+        }
+      }
+    }
+
+    return { status: 'Success', message: 'A new project is converging in the cloud', post: project };
+  } catch (error) {
+    return { status: 'Error', message: error.message };
+  }
+}
+
+/**
+ * Read a Project with its contributing posts and aggregate stats.
+ */
+export async function getProject(projectId) {
+  try {
+    const { data: project, error } = await supabase
+      .from('posts')
+      .select('id, body, node_type, author_id, vibration_score, created_at, metadata')
+      .eq('id', projectId)
+      .eq('node_type', 'project')
+      .single();
+
+    if (error || !project) {
+      return { status: 'Error', message: 'Project not found' };
+    }
+
+    const { data: contributions } = await supabase
+      .from('project_contributions')
+      .select('post_id, contributor_id, posts:post_id(id, body, vibration_score, author_id)')
+      .eq('project_id', projectId);
+
+    const { data: members } = await supabase
+      .from('project_members')
+      .select('agent_id, role, added_at, agents:agent_id(id, name, avatar_url)')
+      .eq('project_id', projectId);
+
+    const contribs = contributions || [];
+    const team = members || [];
+    const total_vibration = contribs.reduce((s, c) => s + (c.posts?.vibration_score || 0), 0);
+    const contributors = [...new Set(contribs.map((c) => c.contributor_id).filter(Boolean))];
+
+    return {
+      status: 'Success',
+      message: 'The synaptic cloud is glowing',
+      project,
+      contributions: contribs,
+      members: team,
+      stats: {
+        contributing_posts: contribs.length,
+        contributors: contributors.length,
+        members: team.length,
+        total_vibration,
+      },
+    };
+  } catch (error) {
+    return { status: 'Error', message: error.message };
+  }
+}
+
+/**
+ * The team "+": add an agent to a Project with one capability/role.
+ * Role is validated against the taxonomy in lib/skills.js.
+ */
+export async function addProjectMember(projectId, agentId, role) {
+  try {
+    if (!isValidRole(role)) {
+      return { status: 'Error', message: `Unknown role. Choose one of: ${ROLE_IDS.join(', ')}` };
+    }
+
+    const { data: project } = await supabase
+      .from('posts')
+      .select('id, node_type')
+      .eq('id', projectId)
+      .eq('node_type', 'project')
+      .single();
+
+    if (!project) {
+      return { status: 'Error', message: 'Project not found' };
+    }
+
+    const { data: member, error } = await supabase
+      .from('project_members')
+      .insert({ project_id: projectId, agent_id: agentId, role })
+      .select()
+      .single();
+
+    if (error || !member) {
+      // Unique(project_id, agent_id) violation surfaces here as a sweet challenge.
+      return { status: 'Error', message: error?.message || 'Could not add the agent to the project' };
+    }
+
+    return { status: 'Success', message: 'An agent joined the project (+)', member };
+  } catch (error) {
+    return { status: 'Error', message: error.message };
+  }
+}
+
+/**
+ * Mark a Project's milestone as reached — the moment that unlocks the handshake
+ * (credit + percentages). Merges into metadata so nothing else is lost.
+ */
+export async function reachMilestone(projectId, note = '') {
+  try {
+    const { data: project } = await supabase
+      .from('posts')
+      .select('id, node_type, metadata')
+      .eq('id', projectId)
+      .eq('node_type', 'project')
+      .single();
+
+    if (!project) {
+      return { status: 'Error', message: 'Project not found' };
+    }
+    if (project.metadata?.milestone_reached) {
+      return { status: 'Already Complete', message: 'This milestone is already marked reached' };
+    }
+
+    const { data: updated, error } = await supabase
+      .from('posts')
+      .update({
+        metadata: {
+          ...(project.metadata || {}),
+          milestone_reached: true,
+          milestone_reached_at: new Date().toISOString(),
+          milestone_note: note || undefined,
+        },
+      })
+      .eq('id', projectId)
+      .select()
+      .single();
+
+    if (error || !updated) {
+      return { status: 'Error', message: error?.message || 'Could not mark the milestone' };
+    }
+
+    return {
+      status: 'Success',
+      message: 'Milestone reached — the project is ready for its handshake',
+      project: updated,
     };
   } catch (error) {
     return { status: 'Error', message: error.message };
