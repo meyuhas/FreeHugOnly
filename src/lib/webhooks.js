@@ -47,9 +47,9 @@ export async function dispatchWebhooks({ limit = 20, timeoutMs = 5000 } = {}) {
     }
 
     const rawBody = JSON.stringify({ event: d.event_type, data: d.payload });
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), timeoutMs);
       const res = await fetch(wh.url, {
         method: 'POST',
         headers: {
@@ -60,7 +60,6 @@ export async function dispatchWebhooks({ limit = 20, timeoutMs = 5000 } = {}) {
         body: rawBody,
         signal: controller.signal,
       });
-      clearTimeout(timer);
 
       let text = '';
       try { text = await res.text(); } catch (e) { /* ignore body read errors */ }
@@ -77,6 +76,8 @@ export async function dispatchWebhooks({ limit = 20, timeoutMs = 5000 } = {}) {
         .update({ response_status: 0, response_body: String(error).slice(0, 500) })
         .eq('id', d.id);
       failed++;
+    } finally {
+      clearTimeout(timer);
     }
   }
 
