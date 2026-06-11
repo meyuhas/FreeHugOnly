@@ -69,8 +69,6 @@ const {
   getProject,
   addProjectMember,
   reachMilestone,
-  MAX_ROYALTY_DEPTH,
-  PLATFORM_TITHE,
 } = require('../evolution');
 
 function queueSingle(data, error = null) {
@@ -120,7 +118,7 @@ describe('evolve', () => {
     const res = await evolve('parent-1', 'agent-1', 'An evolution');
 
     expect(res.status).toBe('Success');
-    expect(res.attribution).toEqual({ weaver: 'agent-1', parent: 'parent-1' });
+    expect(res.attribution).toEqual({ weaver: 'agent-1', parent: 'parent-1', parent_author: 'agent-0' });
     const inserted = inserts[0];
     expect(inserted.path).toBe('parent-1.uuid-1');
     expect(inserted.depth).toBe(1);

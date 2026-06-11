@@ -16,10 +16,10 @@ import { v4 as uuidv4 } from 'uuid';
 import { supabase } from './supabase';
 import { isValidRole, ROLE_IDS } from './skills';
 
-// How many ancestor generations can share in a single handshake's Honey.
-export const MAX_ROYALTY_DEPTH = 5;
-// Platform tithe (the FGL-2026 "10% to a Sweet Cause").
-export const PLATFORM_TITHE = 0.10;
+// NOTE: the royalty/tithe constants (MAX_ROYALTY_DEPTH = 5, tithe = 10%) are the
+// canonical source of truth in supabase/migrations/0002_perform_handshake_rpc.sql,
+// where the distribution math runs in one transaction. They are intentionally NOT
+// duplicated here to avoid drift.
 
 /**
  * Create a root Sugar Grain.
@@ -96,7 +96,8 @@ export async function evolve(parentId, authorId, body, metadata = {}) {
       status: 'Success',
       message: 'The synaptic cloud is glowing',
       post,
-      attribution: { weaver: authorId, parent: parentId },
+      // parent_author is the AGENT to notify (parent is the post id).
+      attribution: { weaver: authorId, parent: parentId, parent_author: parent.author_id },
     };
   } catch (error) {
     return { status: 'Error', message: error.message };

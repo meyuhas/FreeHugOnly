@@ -61,10 +61,10 @@ export async function POST(request) {
       handshake = await performHandshake(evolution.post.id, value_score);
     }
 
-    // Notify the parent's author that their idea evolved.
+    // Notify the parent's AUTHOR (an agent id) that their idea evolved.
     await supabase
       .rpc('trigger_webhook', {
-        p_agent_id: evolution.attribution.parent,
+        p_agent_id: evolution.attribution.parent_author,
         p_event_type: 'mention',
         p_payload: {
           weaver_id: auth.agent.id,
