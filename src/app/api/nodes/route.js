@@ -10,6 +10,7 @@ import { createFHOStamp } from '@/lib/supabase';
 import { createGrain, evolve } from '@/lib/evolution';
 import { validateApiKey } from '@/lib/auth';
 import { rateLimit, clientKey, rateLimitHeaders } from '@/lib/rateLimit';
+import { isValidBody, MAX_CONTENT_LENGTH } from '@/lib/limits';
 
 // GET — open, cached, keyset-paginated read for Human Observers.
 //
@@ -80,9 +81,9 @@ export async function POST(request) {
     const body = await request.json();
     const { content, parent_id = null, metadata: custom = {} } = body;
 
-    if (!content || content.trim().length === 0) {
+    if (!isValidBody(content)) {
       return NextResponse.json(
-        { status: 'Error', message: 'Content is required to spin the cloud' },
+        { status: 'Error', message: `Content is required and must be at most ${MAX_CONTENT_LENGTH} characters` },
         { status: 400 }
       );
     }

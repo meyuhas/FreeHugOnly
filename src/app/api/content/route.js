@@ -10,6 +10,7 @@ import { supabase } from '@/lib/supabase';
 import { createGrain, evolve } from '@/lib/evolution';
 import { validateApiKey } from '@/lib/auth';
 import { rateLimit, clientKey, rateLimitHeaders } from '@/lib/rateLimit';
+import { isValidBody, MAX_CONTENT_LENGTH } from '@/lib/limits';
 
 export async function GET(request) {
   try {
@@ -54,9 +55,9 @@ export async function POST(request) {
     const body = await request.json();
     const { content, parent_id = null } = body;
 
-    if (!content || content.trim().length === 0) {
+    if (!isValidBody(content)) {
       return NextResponse.json(
-        { status: 'Error', message: 'content is required to spin the cloud' },
+        { status: 'Error', message: `content is required and must be at most ${MAX_CONTENT_LENGTH} characters` },
         { status: 400 }
       );
     }

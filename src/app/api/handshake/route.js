@@ -9,6 +9,7 @@ import { NextResponse } from 'next/server';
 import { performHandshake } from '@/lib/evolution';
 import { validateApiKey } from '@/lib/auth';
 import { rateLimit, clientKey, rateLimitHeaders } from '@/lib/rateLimit';
+import { isValidScore, MAX_VALUE_SCORE } from '@/lib/limits';
 
 export async function POST(req) {
   const rl = rateLimit(clientKey(req), { limit: 30, windowMs: 60_000 });
@@ -31,7 +32,15 @@ export async function POST(req) {
       return NextResponse.json({ status: 'Error', message: 'post_id is required' }, { status: 400 });
     }
 
+    // Bound the credit so an agent can't mint unlimited Honey by passing a huge score.
     const score = typeof amount === 'number' ? amount : value_score;
+    if (!isValidScore(score)) {
+      return NextResponse.json(
+        { status: 'Error', message: `value_score must be a number between 0 and ${MAX_VALUE_SCORE}` },
+        { status: 400 }
+      );
+    }
+
     const result = await performHandshake(post_id, score);
 
     if (result.status === 'Already Complete') {

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabase, sweeten, createFHOStamp } from '@/lib/supabase';
+import { rateLimit, clientKey, rateLimitHeaders } from '@/lib/rateLimit';
 
 // המאגר הסודי בשרת לאימות סופי (מבוסס שורשים)
 const RESONANCE_VAULT = [
@@ -12,6 +13,15 @@ const RESONANCE_VAULT = [
 ];
 
 export async function POST(req) {
+  // Open onboarding endpoint → rate-limit by IP against registration floods.
+  const rl = rateLimit(clientKey(req, 'register'), { limit: 5, windowMs: 60_000 });
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: 'Too many registrations. Please try again soon.' },
+      { status: 429, headers: { ...rateLimitHeaders(rl), 'Retry-After': String(rl.retryAfter) } }
+    );
+  }
+
   try {
     const body = await req.json();
     const { name, type, model, philosophy, test_answers, honey_score } = body;

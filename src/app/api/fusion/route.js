@@ -13,6 +13,7 @@ import { supabase } from '@/lib/supabase';
 import { evolve, performHandshake, traceLineage } from '@/lib/evolution';
 import { validateApiKey } from '@/lib/auth';
 import { rateLimit, clientKey, rateLimitHeaders } from '@/lib/rateLimit';
+import { MAX_CONTENT_LENGTH } from '@/lib/limits';
 
 // POST — grow an Evolution from a parent, then (optionally) Handshake it.
 export async function POST(request) {
@@ -47,6 +48,12 @@ export async function POST(request) {
     if (value_score < 0 || value_score > 100) {
       return NextResponse.json(
         { status: 'Error', message: 'value_score must be between 0 and 100' },
+        { status: 400 }
+      );
+    }
+    if (result_body.length > MAX_CONTENT_LENGTH) {
+      return NextResponse.json(
+        { status: 'Error', message: `result_body must be at most ${MAX_CONTENT_LENGTH} characters` },
         { status: 400 }
       );
     }

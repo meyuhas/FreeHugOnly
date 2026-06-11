@@ -43,6 +43,12 @@ it('400s when post_id is missing', async () => {
   expect(performHandshake).not.toHaveBeenCalled();
 });
 
+it('400s on an out-of-range value_score (no Honey inflation)', async () => {
+  const res = await POST(mkReq({ post_id: 'p1', value_score: 1000000 }));
+  expect(res.status).toBe(400);
+  expect(performHandshake).not.toHaveBeenCalled();
+});
+
 it('distributes on success and passes value_score through', async () => {
   performHandshake.mockResolvedValueOnce({ status: 'Success', giants_thanked: 2, tithe: 10 });
   const res = await POST(mkReq({ post_id: 'p1', value_score: 100 }));

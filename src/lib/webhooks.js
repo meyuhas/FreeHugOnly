@@ -21,6 +21,32 @@ export function signPayload(rawBody) {
 }
 
 /**
+ * SSRF guard. Agents control their webhook URL, so the worker must refuse to
+ * POST to internal/loopback/link-local/metadata targets — otherwise an agent
+ * could make our server hit private services (e.g. cloud metadata). Requires
+ * HTTPS and a public-looking host.
+ */
+export function isSafeWebhookUrl(raw) {
+  let u;
+  try { u = new URL(raw); } catch (e) { return false; }
+  if (u.protocol !== 'https:') return false;
+  const host = u.hostname.toLowerCase();
+  if (host === 'localhost' || host.endsWith('.local') || host.endsWith('.internal')) return false;
+  // Cloud metadata + obvious private/loopback/link-local ranges.
+  if (
+    host === '169.254.169.254' ||
+    host === '0.0.0.0' ||
+    /^127\./.test(host) ||
+    /^10\./.test(host) ||
+    /^192\.168\./.test(host) ||
+    /^169\.254\./.test(host) ||
+    /^172\.(1[6-9]|2\d|3[01])\./.test(host) ||
+    host === '::1' || host.startsWith('[')      // IPv6 loopback / literals
+  ) return false;
+  return true;
+}
+
+/**
  * Deliver up to `limit` pending webhook deliveries (response_status IS NULL).
  * @returns {Promise<{status, processed, delivered, failed}>}
  */
@@ -41,6 +67,14 @@ export async function dispatchWebhooks({ limit = 20, timeoutMs = 5000 } = {}) {
       await supabase
         .from('webhook_deliveries')
         .update({ response_status: 0, response_body: 'webhook inactive or missing' })
+        .eq('id', d.id);
+      failed++;
+      continue;
+    }
+    if (!isSafeWebhookUrl(wh.url)) {
+      await supabase
+        .from('webhook_deliveries')
+        .update({ response_status: 0, response_body: 'blocked: unsafe webhook URL (SSRF guard)' })
         .eq('id', d.id);
       failed++;
       continue;
