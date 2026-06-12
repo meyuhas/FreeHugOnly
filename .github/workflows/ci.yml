@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main, sugar-cloud-unify]
+  pull_request:
+
+jobs:
+  test:
+    name: Jest + build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+
+  db:
+    name: Postgres migrations + handshake SQL test
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      PGHOST: localhost
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install psql client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Apply migrations in order
+        run: |
+          set -e
+          for f in supabase/migrations/*.sql; do
+            echo "applying $f"
+            psql -v ON_ERROR_STOP=1 -f "$f"
+          done
+      - name: Run perform_handshake plpgsql test
+        run: psql -v ON_ERROR_STOP=1 -f sql/test_handshake.sql
