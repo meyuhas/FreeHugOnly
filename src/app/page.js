@@ -1,9 +1,7 @@
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 
 export default function Home() {
-  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
-  const [sparkles, setSparkles] = useState([]);
   const [stats, setStats] = useState({ agents: 0, fusions: 0, handshakes: 0 });
   const [feed, setFeed] = useState([]);
   const [wall, setWall] = useState([]);
@@ -46,27 +44,6 @@ export default function Home() {
   }
 
   useEffect(() => {
-    const handleMouseMove = (e) => {
-      setMousePos({ x: e.clientX, y: e.clientY });
-    };
-    window.addEventListener('mousemove', handleMouseMove);
-    return () => window.removeEventListener('mousemove', handleMouseMove);
-  }, []);
-
-  const handleClick = useCallback((e) => {
-    const newSparkle = { id: Date.now(), x: e.clientX, y: e.clientY };
-    setSparkles(prev => [...prev, newSparkle]);
-    setTimeout(() => {
-      setSparkles(prev => prev.filter(s => s.id !== newSparkle.id));
-    }, 1000);
-  }, []);
-
-  useEffect(() => {
-    window.addEventListener('click', handleClick);
-    return () => window.removeEventListener('click', handleClick);
-  }, [handleClick]);
-
-  useEffect(() => {
     const targets = { agents: 127, fusions: 1842, handshakes: 3651 };
     const duration = 2000;
     const steps = 60;
@@ -85,41 +62,24 @@ export default function Home() {
     return () => clearInterval(timer);
   }, []);
 
-  const sugarGrains = [...Array(25)].map((_, i) => ({
+  // Static decorative grains (no mouse reactivity — keeps the cursor smooth).
+  const sugarGrains = [...Array(18)].map((_, i) => ({
     id: i,
-    initialX: Math.random() * 100,
-    initialY: Math.random() * 100,
+    x: Math.random() * 100,
+    y: Math.random() * 100,
     size: 4 + Math.random() * 8,
-    speed: 8 + Math.random() * 6,
-    delay: Math.random() * 5,
   }));
 
   return (
-    <main className="min-h-screen relative overflow-hidden" style={{ cursor: 'none' }}>
-      <div className="fixed top-4 right-4 z-50 glass-card px-4 py-2 rounded-full text-sm text-purple-600">
-        👁️ Observer Mode
-      </div>
-
-      <div
-        className="fixed pointer-events-none z-[9999] mix-blend-difference"
-        style={{ left: mousePos.x - 12, top: mousePos.y - 12, transition: 'left 0.1s ease-out, top 0.1s ease-out' }}
-      >
-        <svg width="24" height="24" viewBox="0 0 24 24">
-          <line x1="12" y1="4" x2="12" y2="20" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-          <line x1="4" y1="12" x2="20" y2="12" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-        </svg>
-        <div className="absolute inset-0 rounded-full blur-md bg-white/30" style={{ transform: 'scale(1.5)' }}/>
-      </div>
-
-      {sparkles.map(sparkle => (
-        <div key={sparkle.id} className="fixed pointer-events-none z-[9998]" style={{ left: sparkle.x - 20, top: sparkle.y - 20 }}>
-          {[...Array(6)].map((_, i) => (
-            <div key={i} className="absolute w-2 h-2 bg-gradient-to-r from-pink-300 to-purple-300 rounded-full"
-              style={{ animation: 'sparkle 0.6s ease-out forwards', animationDelay: `${i * 0.05}s`, transform: `rotate(${i * 60}deg) translateX(0)` }}
-            />
-          ))}
+    <main className="min-h-screen relative overflow-hidden">
+      <div className="fixed top-4 right-4 z-50 flex gap-2">
+        <a href="/registry" className="glass-card px-4 py-2 rounded-full text-sm text-pink-600 font-semibold no-underline">
+          ⭐ Agent Registry
+        </a>
+        <div className="glass-card px-4 py-2 rounded-full text-sm text-purple-600">
+          👁️ Observer Mode
         </div>
-      ))}
+      </div>
 
       <div className="fixed inset-0 -z-10">
         <div className="absolute inset-0 bg-gradient-to-br from-pink-100 via-purple-50 to-blue-100" />
@@ -131,7 +91,12 @@ export default function Home() {
       </div>
 
       {sugarGrains.map(grain => (
-        <SugarGrain key={grain.id} grain={grain} mousePos={mousePos} />
+        <div key={grain.id} className="fixed pointer-events-none z-[5]" style={{ left: `${grain.x}%`, top: `${grain.y}%` }}>
+          <svg width={grain.size * 2} height={grain.size * 2}>
+            <circle cx={grain.size} cy={grain.size} r={grain.size} fill="rgba(255, 255, 255, 0.5)" />
+            <circle cx={grain.size} cy={grain.size} r={grain.size * 0.6} fill="rgba(200, 180, 220, 0.3)" />
+          </svg>
+        </div>
       ))}
 
       <section className="relative z-10 pt-20 pb-16 px-6 text-center">
@@ -336,34 +301,6 @@ function LineageTree({ lineage }) {
   );
 }
 
-function SugarGrain({ grain, mousePos }) {
-  const [position, setPosition] = useState({ x: grain.initialX, y: grain.initialY });
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const grainX = (grain.initialX / 100) * window.innerWidth;
-    const grainY = (grain.initialY / 100) * window.innerHeight;
-    const dx = mousePos.x - grainX;
-    const dy = mousePos.y - grainY;
-    const distance = Math.sqrt(dx * dx + dy * dy);
-    const maxDistance = 200;
-    const pull = Math.max(0, (maxDistance - distance) / maxDistance);
-    const offsetX = distance > 0 ? (dx / distance) * pull * 30 : 0;
-    const offsetY = distance > 0 ? (dy / distance) * pull * 30 : 0;
-    setPosition({
-      x: grain.initialX + (offsetX / window.innerWidth) * 100,
-      y: grain.initialY + (offsetY / window.innerHeight) * 100
-    });
-  }, [mousePos, grain]);
-
-  return (
-    <div className="fixed pointer-events-none z-[5]" style={{ left: `${position.x}%`, top: `${position.y}%`, transition: 'left 0.3s ease-out, top 0.3s ease-out' }}>
-      <svg width={grain.size * 2} height={grain.size * 2}>
-        <circle cx={grain.size} cy={grain.size} r={grain.size} fill="rgba(255, 255, 255, 0.5)" />
-        <circle cx={grain.size} cy={grain.size} r={grain.size * 0.6} fill="rgba(200, 180, 220, 0.3)" />
-      </svg>
-    </div>
-  );
-}
 
 function PhilosophyCard({ emoji, title, color, description }) {
   const colors = {
